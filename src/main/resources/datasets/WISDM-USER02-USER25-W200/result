@@ -1,0 +1,11 @@
+BOSS VS Training:	62 6	normed: 	true
+Correct:	100%	Time: 	1.093 s
+BOSS MD Testing with 7 models:	
+Correct:	91%	Time: 	0.069 s
+
+BOSS VS Training:	114 6	normed: 	false
+Correct:	100%	Time: 	0.519 s
+BOSS MD Testing with 13 models:	
+Correct:	94%	Time: 	0.094 s
+
+WISDM-USER02-USER25-W200;BOSS MD;1.0;0.94
