@@ -1,32 +1,28 @@
 package sfa.classification;
-import java.io.File;
+
 import java.io.IOException;
 import java.text.MessageFormat;
 import java.util.*;
 import java.util.Map.Entry;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
-
 import com.carrotsearch.hppc.*;
 import sfa.timeseries.MultiDimTimeSeries;
-import sfa.timeseries.MultiDimTimeSeriesLoader;
 import com.carrotsearch.hppc.cursors.ObjectCursor;
 import com.carrotsearch.hppc.cursors.FloatCursor;
 import com.carrotsearch.hppc.cursors.IntCursor;
 import sfa.timeseries.TimeSeries;
 
-public class MDClassifier {
-    public MultiDimTimeSeries[] testSamples;
-    public MultiDimTimeSeries[] trainSamples;
-    public static int threads = 4;
-    public static boolean DEBUG = true;
+public abstract class MDClassifier {
+    transient ExecutorService exec;
 
     public static boolean[] NORMALIZATION = new boolean[]{true, false};
 
-
+    public static boolean DEBUG = true;
     public static boolean ENSEMBLE_WEIGHTS = true;
 
-
-    public AtomicInteger correctTraining = new AtomicInteger(0);
+    public static int threads = 1;
 
     protected int[][] testIndices;
     protected int[][] trainIndices;
@@ -38,23 +34,71 @@ public class MDClassifier {
     public final int BLOCKS = 8;
 
     static {
-//        Runtime runtime = Runtime.getRuntime();
-//        if (runtime.availableProcessors() <= 4) {
-//            threads = runtime.availableProcessors() - 1;
-//        } else {
-//            threads = runtime.availableProcessors();
-//        }
+        Runtime runtime = Runtime.getRuntime();
+        if (runtime.availableProcessors() <= 4) {
+            threads = runtime.availableProcessors() - 1;
+        } else {
+            threads = runtime.availableProcessors();
+        }
     }
 
-    public MDClassifier(MultiDimTimeSeries[] train, MultiDimTimeSeries[] test) throws IOException {
-        this.trainSamples = train;
-        this.testSamples = test;
+    public MDClassifier() {
+        this.exec = Executors.newFixedThreadPool(threads);
     }
 
-    public abstract Score eval() throws IOException;
+    /**
+     * Invokes {@code shutdown} when this executor is no longer
+     * referenced and it has no threads.
+     */
+    protected void finalize() {
+        if (exec != null) {
+            exec.shutdown();
+        }
+    }
+
+    /**
+     * Build a classifier from the a training set with class labels.
+     *
+     * @param trainSamples The training set
+     * @return The accuracy on the train-samples
+     */
+    public abstract Score fit(final MultiDimTimeSeries[] trainSamples);
+
+    /**
+     * The predicted classes and accuracies of an array of samples.
+     *
+     * @param testSamples The passed set
+     * @return The predictions for each passed sample and the test accuracy.
+     */
+    public abstract Predictions score(final MultiDimTimeSeries[] testSamples);
+
+    /**
+     * The predicted classes of an array of samples.
+     *
+     * @param testSamples The passed set
+     * @return The predictions for each passed sample.
+     */
+    public abstract Double[] predict(final MultiDimTimeSeries[] testSamples);
+
+    /**
+     * Performs training and testing on a set of train- and test-samples.
+     *
+     * @param trainSamples The training set
+     * @param testSamples  The training set
+     * @return The accuracy on the test- and train-samples
+     */
+    public abstract Score eval(
+            final MultiDimTimeSeries[] trainSamples, final MultiDimTimeSeries[] testSamples);
+
+    protected Predictions evalLabels(TimeSeries[] testSamples, Double[] labels) {
+        int correct = 0;
+        for (int ind = 0; ind < testSamples.length; ind++) {
+            correct += compareLabels(labels[ind],(testSamples[ind].getLabel()))? 1 : 0;
+        }
+        return new Predictions(labels, correct);
+    }
 
     public static class Words {
-
         public static int binlog(int bits) {
             int log = 0;
             if ((bits & 0xffff0000) != 0) {
@@ -84,6 +128,8 @@ public class MDClassifier {
          * Returns a long containing the values in bytes.
          *
          * @param bytes
+         * @param to
+         * @param usedBits
          * @return
          */
         public static long fromByteArrayOne(short[] bytes, int to, byte usedBits) {
@@ -106,37 +152,97 @@ public class MDClassifier {
         }
     }
 
-    public static class Score implements Comparable<Score> {
+    public static class Model implements Comparable<Model> {
 
         public String name;
-        public double training;
-        public double testing;
-        public boolean normed;
         public int windowLength;
+        public boolean normed;
 
-        public Score(
+        public Score score;
+
+        public Model(
                 String name,
-                double testing,
-                double training,
+                int testing,
+                int testSize,
+                int training,
+                int trainSize,
+                boolean normed,
+                int windowLength
+        ) {
+            this(name, new Score(name,testing,testSize,training,trainSize,windowLength),normed,windowLength);
+        }
+
+        public Model(
+                String name,
+                Score score,
                 boolean normed,
                 int windowLength
         ) {
             this.name = name;
-            this.training = training;
-            this.testing = testing;
+            this.score = score;
             this.normed = normed;
             this.windowLength = windowLength;
         }
 
         @Override
         public String toString() {
-            return this.name + ";" + this.training + ";" + this.testing;
+            return score.toString();
         }
+
+        public int compareTo(Model bestScore) { return this.score.compareTo(bestScore.score); }
+
+    }
+
+
+    public static class Score implements Comparable<Score> {
+        public String name;
+        public int training;
+        public int trainSize;
+        public int testing;
+        public int testSize;
+        public int windowLength;
+
+        public Score() {
+        }
+
+        public Score(
+                String name,
+                int testing,
+                int testSize,
+                int training,
+                int trainSize,
+                int windowLength
+        ) {
+            this.name = name;
+            this.training = training;
+            this.trainSize = trainSize;
+            this.testing = testing;
+            this.testSize = testSize;
+            this.windowLength = windowLength;
+        }
+
+        public double getTestingAccuracy() {
+            return 1 - formatError(testing, testSize);
+        }
+
+        public double getTrainingAccuracy() {
+            return 1 - formatError((int) training, trainSize);
+        }
+
+        @Override
+        public String toString() {
+            double test = getTestingAccuracy();
+            double train = getTrainingAccuracy();
+
+            return this.name + ";" + train + ";" + test;
+        }
+
 
         public int compareTo(Score bestScore) {
             if (this.training > bestScore.training
                     || this.training == bestScore.training
-                    && this.windowLength > bestScore.windowLength) {
+                    && this.windowLength > bestScore.windowLength // on a tie, prefer the one with the larger window-length
+                    ) {
                 return 1;
             }
             return -1;
@@ -150,10 +256,10 @@ public class MDClassifier {
 
     public static class Predictions {
 
-        public String[] labels;
+        public Double[] labels;
         public AtomicInteger correct;
 
-        public Predictions(String[] labels, int bestCorrect) {
+        public Predictions(Double[] labels, int bestCorrect) {
             this.labels = labels;
             this.correct = new AtomicInteger(bestCorrect);
         }
@@ -169,7 +275,11 @@ public class MDClassifier {
         System.out.println("\tTime: \t" + (System.currentTimeMillis() - time) / 1000.0 + " s");
     }
 
-    public static void outputConfusionMatrix(ObjectObjectOpenHashMap<String, ObjectLongOpenHashMap> matrix) {
+    public static double formatError(int correct, int testSize) {
+        return Math.round(1000 * (testSize - correct) / (double) (testSize)) / 1000.0;
+    }
+
+    /*public static void outputConfusionMatrix(ObjectObjectOpenHashMap<String, ObjectLongOpenHashMap> matrix) {
         try {
             int rows = matrix.size();
             List<String> labels = new ArrayList(rows);
@@ -205,77 +315,26 @@ public class MDClassifier {
         } catch (Exception e) {
             System.out.println("Matrix is empty!!");
         }
-    }
+    }*/
 
-    private static Comparator<String> ALPHABETICAL_ORDER = new Comparator<String>() {
-        public int compare(String str1, String str2) {
-            int res = String.CASE_INSENSITIVE_ORDER.compare(str1, str2);
-            if (res == 0) {
-                res = str1.compareTo(str2);
-            }
-            return res;
-        }
-    };
 
-    public static double formatError(int correct, int testSize) {
-        double error = Math.round(1000 * (testSize - correct) / (double) (testSize)) / 1000.0;
-        return error;
-    }
 
-    @SuppressWarnings("unchecked")
-    public static TimeSeries[][] getStratifiedSplits(
-            TimeSeries[] samples,
-            int splits) {
-
-        Map<String, LinkedList<Integer>> elements = splitByLabel(samples);
-
-        // pick samples
-        double trainTestSplit = 1.0 / (double) splits;
-        ArrayList<TimeSeries>[] sets = new ArrayList[splits];
-        for (int s = 0; s < splits; s++) {
-            sets[s] = new ArrayList<TimeSeries>();
-            for (Entry<String, LinkedList<Integer>> data : elements.entrySet()) {
-                int count = (int) (data.getValue().size() * trainTestSplit);
-                int i = 0;
-                while (!data.getValue().isEmpty()
-                        && i <= count) {
-                    sets[s].add(samples[data.getValue().remove()]);
-                    i++;
-                }
-            }
-        }
-
-        ArrayList<TimeSeries> testSet = new ArrayList<TimeSeries>();
-        for (List<Integer> indices : elements.values()) {
-            for (int index : indices) {
-                testSet.add(samples[index]);
-            }
-        }
-
-        TimeSeries[][] data = new TimeSeries[splits][];
-        for (int s = 0; s < splits; s++) {
-            data[s] = sets[s].toArray(new TimeSeries[]{});
-        }
-
-        return data;
-    }
-
-    public static Map<String, LinkedList<Integer>> splitByLabel(TimeSeries[] samples) {
-        Map<String, LinkedList<Integer>> elements = new HashMap<String, LinkedList<Integer>>();
-
-        for (int i = 0; i < samples.length; i++) {
-            String label = samples[i].getLabel();
-            if (!label.trim().isEmpty()) {
-                LinkedList<Integer> sameLabel = elements.get(label);
-                if (sameLabel == null) {
-                    sameLabel = new LinkedList<Integer>();
-                    elements.put(label, sameLabel);
-                }
-                sameLabel.add(i);
-            }
-        }
-        return elements;
-    }
+//    public static Map<String, LinkedList<Integer>> splitByLabel(TimeSeries[] samples) {
+//        Map<String, LinkedList<Integer>> elements = new HashMap<String, LinkedList<Integer>>();
+//
+//        for (int i = 0; i < samples.length; i++) {
+//            String label = samples[i].getLabel();
+//            if (!label.trim().isEmpty()) {
+//                LinkedList<Integer> sameLabel = elements.get(label);
+//                if (sameLabel == null) {
+//                    sameLabel = new LinkedList<Integer>();
+//                    elements.put(label, sameLabel);
+//                }
+//                sameLabel.add(i);
+//            }
+//        }
+//        return elements;
+//    }
 
     public static class Pair<E, T> {
 
@@ -303,55 +362,95 @@ public class MDClassifier {
         }
     }
 
-    public int score(
+
+    protected boolean compareLabels(Double label1, Double label2) {
+        // compare 1.0000 to 1.0 in String returns false, hence the conversion to double
+        return label1 != null && label2 != null && label1.equals(label2);
+    }
+
+    protected <E extends Model> Ensemble<E> filterByFactor(
+            List<E> results,
+            int correctTraining,
+            double factor) {
+
+        // sort descending
+        Collections.sort(results, Collections.reverseOrder());
+
+        // only keep best scores
+        List<E> model = new ArrayList<>();
+        for (E score : results) {
+            if (score.score.training >= correctTraining * factor) { // all with same score
+                model.add(score);
+            }
+        }
+
+        return new Ensemble<>(model);
+    }
+
+    protected Double[] score(
             final String name,
             final MultiDimTimeSeries[] samples,
-            long startTime,
-            final List<Pair<String, Double>>[] labels,
+            final List<Pair<Double, Integer>>[] labels,
             final List<Integer> currentWindowLengths) {
-        HashSet<String> uniqueLabels = uniqueClassLabels(samples); // OLHO somente as labels de TEST
-        ObjectObjectOpenHashMap<String, ObjectLongOpenHashMap> confusionMatrix = new ObjectObjectOpenHashMap<String, ObjectLongOpenHashMap>(uniqueLabels.size());
-        initConfusionMatrix(confusionMatrix, uniqueLabels);
+
+        Double[] predictedLabels = new Double[samples.length];
+        //HashSet<String> uniqueLabels = uniqueClassLabels(samples); // OLHO somente as labels de TEST
+        //ObjectObjectOpenHashMap<String, ObjectLongOpenHashMap> confusionMatrix = new ObjectObjectOpenHashMap<String, ObjectLongOpenHashMap>(uniqueLabels.size());
+        //initConfusionMatrix(confusionMatrix, uniqueLabels);
+
         int correctTesting = 0;
         for (int i = 0; i < labels.length; i++) {
+            Map<Double, Long> counts = new HashMap<>();
 
-            String maxLabel = "";
-            double maxCount = 0.0;
-
-            HashMap<String, Double> counts = new HashMap<String, Double>();
-
-            for (Pair<String, Double> k : labels[i]) {
+            for (Pair<Double, Integer> k : labels[i]) {
                 if (k != null && k.key != null) {
-                    String s = k.key;
-                    Double count = counts.get(s);
-                    double increment = ENSEMBLE_WEIGHTS ? k.value : 1;
+                    Double label = k.key;
+                    Long count = counts.get(label);
+                    long increment = ENSEMBLE_WEIGHTS ? k.value : 1;
                     count = (count == null) ? increment : count + increment;
-                    counts.put(s, count);
-                    if (maxCount < count
-                            || maxCount == count && maxLabel.compareTo(s) < 0) {
-                        maxCount = count;
-                        maxLabel = s;
-                    }
+                    counts.put(label, count);
+
                 }
             }
+            /*
             if (samples[i].getLabel().equals(maxLabel)) {
                 correctTesting++;
                 confusionMatrix.get(maxLabel).putOrAdd(maxLabel, (long) 1, (long) 1);
             } else {
                 confusionMatrix.get(samples[i].getLabel()).putOrAdd(maxLabel, (long) 1, (long) 1);
+            }*/
+            long maxCount = -1;
+            for (Entry<Double, Long> e : counts.entrySet()) {
+                if (predictedLabels[i] == null
+                        || maxCount < e.getValue()
+                        || maxCount == e.getValue()  // break ties
+                        && Double.valueOf(predictedLabels[i]) <= Double.valueOf(e.getKey())
+                        ) {
+                    maxCount = e.getValue();
+                    // maxCounts[i] = maxCount;
+                    predictedLabels[i] = e.getKey();
+                }
             }
-
         }
 
         if (DEBUG) {
             System.out.println(name + " Testing with " + currentWindowLengths.size() + " models:\t");
-            outputResult(correctTesting, startTime, samples.length);
-            outputConfusionMatrix(confusionMatrix);
+            System.out.println(currentWindowLengths.toString() + "\n");
+            //outputResult(correctTesting, startTime, samples.length);
+           // outputConfusionMatrix(confusionMatrix);
         }
-        return correctTesting;
+        return predictedLabels;
     }
 
-    public int getMax(MultiDimTimeSeries[] samples, int MAX_WINDOW_SIZE) {
+    protected Integer[] getWindowsBetween(int minWindowLength, int maxWindowLength) {
+        List<Integer> windows = new ArrayList<>();
+        for (int windowLength = maxWindowLength; windowLength >= minWindowLength; windowLength--) {
+            windows.add(windowLength);
+        }
+        return windows.toArray(new Integer[]{});
+    }
+
+    protected int getMax(MultiDimTimeSeries[] samples, int MAX_WINDOW_SIZE) {
         int max = MAX_WINDOW_SIZE;
         for (MultiDimTimeSeries ts : samples) {
             max = Math.min(ts.getLength(), max);
@@ -359,8 +458,8 @@ public class MDClassifier {
         return max;
     }
 
-    protected static HashSet<String> uniqueClassLabels(MultiDimTimeSeries[] ts) {
-        HashSet<String> labels = new HashSet<String>();
+    protected static Set<Double> uniqueClassLabels(MultiDimTimeSeries[] ts) {
+        Set<Double> labels = new HashSet<>();
         for (MultiDimTimeSeries t : ts) {
             labels.add(t.getLabel());
         }
@@ -383,8 +482,8 @@ public class MDClassifier {
         return indices;
     }
 
-    protected void generateIndices() {
-        IntArrayList[] sets = getStratifiedTrainTestSplitIndices(this.trainSamples, folds);
+    protected void generateIndices(MultiDimTimeSeries[] samples) {
+        IntArrayList[] sets = getStratifiedTrainTestSplitIndices(samples, folds);
         this.testIndices = new int[folds][];
         this.trainIndices = new int[folds][];
         for (int s = 0; s < folds; s++) {
@@ -397,10 +496,10 @@ public class MDClassifier {
             MultiDimTimeSeries[] samples,
             int splits) {
 
-        HashMap<String, IntArrayDeque> elements = new HashMap<String, IntArrayDeque>();
+        HashMap<Double, IntArrayDeque> elements = new HashMap<>();
 
         for (int i = 0; i < samples.length; i++) {
-            String label = samples[i].getLabel();
+            Double label = samples[i].getLabel();
             IntArrayDeque sameLabel = elements.get(label);
             if (sameLabel == null) {
                 sameLabel = new IntArrayDeque();
@@ -416,7 +515,7 @@ public class MDClassifier {
         }
 
         // all but one
-        for (Entry<String, IntArrayDeque> data : elements.entrySet()) {
+        for (Entry<Double, IntArrayDeque> data : elements.entrySet()) {
             IntArrayDeque d = data.getValue();
             separate:
             while (true) {
@@ -465,7 +564,7 @@ public class MDClassifier {
         return setData;
     }
 
-    protected void initConfusionMatrix(
+   /* protected void initConfusionMatrix(
             final ObjectObjectOpenHashMap<String, ObjectLongOpenHashMap> matrix,
             final HashSet<String> uniqueLabels) {
         for (String label : uniqueLabels) {
@@ -478,5 +577,5 @@ public class MDClassifier {
                 }
             }
         }
-    }
+    }*/
 }
