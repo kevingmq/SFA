@@ -132,20 +132,20 @@ public class BOSSMD {
      * @param wordLength the SFA word queryLength
      * @return returns a BOSS boss for each time series in samples
      */
-   /* public BagOfPattern[] createBagOfPattern(
+    public BagOfPatternMD[] createBagOfPattern(
             final int[][] mdWords,
             final MultiDimTimeSeries[] samples,
             final int wordLength) {
-        BagOfPattern[] bagOfPatterns = new BagOfPattern[mdWords.length];
+        BagOfPatternMD[] bagOfPatterns = new BagOfPatternMD[mdWords.length];
 
-        final byte usedBits = (byte) Words.binlog(this.symbols);
+        final byte usedBits = (byte) Words.binlog(this.alphabetSize);
         // FIXME
         // final long mask = (usedBits << wordLength) - 1l;
         final long mask = (1L << (usedBits * wordLength)) - 1L;
 
         // iterate all samples
         for (int j = 0; j < mdWords.length; j++) {
-            bagOfPatterns[j] = new BagOfPattern(mdWords[j].length, samples[j].getLabel());
+            bagOfPatterns[j] = new BagOfPatternMD(mdWords[j].length, samples[j].getLabel());
 
             // create subsequences
             long lastWord = Long.MIN_VALUE;
@@ -161,5 +161,5 @@ public class BOSSMD {
         }
 
         return bagOfPatterns;
-    }*/
+    }
 }

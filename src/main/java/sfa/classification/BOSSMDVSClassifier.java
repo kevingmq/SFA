@@ -7,9 +7,9 @@ import com.carrotsearch.hppc.ObjectObjectHashMap;
 import com.carrotsearch.hppc.cursors.IntIntCursor;
 import com.carrotsearch.hppc.cursors.ObjectObjectCursor;
 import sfa.timeseries.MultiDimTimeSeries;
-import sfa.timeseries.TimeSeries;
-import sfa.transformation.BOSS.BagOfPattern;
+import sfa.transformation.BOSSMD.BagOfPatternMD;
 import sfa.transformation.BOSSMD;
+import sfa.transformation.BOSSMDVS;
 
 
 import java.util.ArrayList;
@@ -23,7 +23,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * <p>
  * Quispe, Kevin G.: A Multidimensional Symbolic Repsentation of Time Series for Activity Recognition Systems. (201X)
  */
-public class BOSSMDClassifier extends MDClassifier {
+public class BOSSMDVSClassifier extends MDClassifier {
 
   // default training parameters
   public static double factor = 0.95;
@@ -37,14 +37,12 @@ public class BOSSMDClassifier extends MDClassifier {
   // the trained weasel
   public Ensemble<BossMDModel<IntFloatHashMap>> model;
 
-  public BOSSMDClassifier() {
+  public BOSSMDVSClassifier() {
     super();
   }
 
 
   public static class BossMDModel<E> extends Model {
-
-    public BossMDModel(){}
 
     public BossMDModel(
             boolean normed,
@@ -56,7 +54,7 @@ public class BOSSMDClassifier extends MDClassifier {
     public ObjectObjectHashMap<Double, E> idf;
 
     // the trained BOSS MD transformation
-    public BOSSMD bossmd;
+    public BOSSMDVS bossmd;
 
     // the best number of Fourier values to be used
     public int features;
@@ -126,21 +124,21 @@ public class BOSSMDClassifier extends MDClassifier {
 
 
   @Override
-  public Predictions score(final TimeSeries[] testSamples) {
+  public Predictions score(final MultiDimTimeSeries[] testSamples) {
     Double[] labels = predict(testSamples);
     return evalLabels(testSamples, labels);
   }
 
 
   @Override
-  public Double[] predict(final TimeSeries[] testSamples) {
+  public Double[] predict(final MultiDimTimeSeries[] testSamples) {
     return predict(this.model, testSamples);
   }
 
 
   protected Ensemble<BossMDModel<IntFloatHashMap>> fitEnsemble(Integer[] windows,
                                                                boolean normMean,
-                                                               TimeSeries[] samples) {
+                                                               MultiDimTimeSeries[] samples) {
 
     final List<BossMDModel<IntFloatHashMap>> results = new ArrayList<>(windows.length);
     final AtomicInteger correctTraining = new AtomicInteger(0);
@@ -154,20 +152,20 @@ public class BOSSMDClassifier extends MDClassifier {
           if (i % threads == id) {
             BossMDModel<IntFloatHashMap> model = new BossMDModel<>(normMean, windows[i]);
             try {
-              BOSSMD bossmd = new BOSSMD(maxF, maxS, windows[i], model.normed);
-              int[][] words = bossmd.createWords(samples);
+              BOSSMDVS bossmd = new BOSSMDVS(maxF, maxS, windows[i], model.normed);
+              int[][] words = bossmd.createMDWords(samples);
 
               for (int f = minF; f <= Math.min(model.windowLength, maxF); f += 2) {
-                BagOfPattern[] bag = bossmd.createBagOfPattern(words, samples, f);
+                BagOfPatternMD[] bag = bossmd.createBagOfPattern(words, samples, f);
 
                 // cross validation using folds
                 int correct = 0;
                 for (int s = 0; s < folds; s++) {
                   // calculate the tf-idf for each class
                   ObjectObjectHashMap<Double, IntFloatHashMap> idf = bossmd.createTfIdf(bag,
-                          BOSSMDClassifier.this.trainIndices[s], this.uniqueLabels);
+                          BOSSMDVSClassifier.this.trainIndices[s], this.uniqueLabels);
 
-                  correct += predict(BOSSMDClassifier.this.testIndices[s], bag, idf).correct.get();
+                  correct += predict(BOSSMDVSClassifier.this.testIndices[s], bag, idf).correct.get();
                 }
                 if (correct > model.score.training) {
                   model.score.training = correct;
@@ -180,7 +178,7 @@ public class BOSSMDClassifier extends MDClassifier {
               }
 
               // obtain the final matrix
-              BagOfPattern[] bag = bossmd.createBagOfPattern(words, samples, model.features);
+              BagOfPatternMD[] bag = bossmd.createBagOfPattern(words, samples, model.features);
 
               // calculate the tf-idf for each class
               model.idf = bossmd.createTfIdf(bag, this.uniqueLabels);
@@ -213,7 +211,7 @@ public class BOSSMDClassifier extends MDClassifier {
 
   protected Predictions predict(
           final int[] indices,
-          final BagOfPattern[] bagOfPatternsTestSamples,
+          final BagOfPatternMD[] bagOfPatternsTestSamples,
           final ObjectObjectHashMap<Double, IntFloatHashMap> matrixTrain) {
 
     Predictions p = new Predictions(new Double[bagOfPatternsTestSamples.length], 0);
@@ -264,7 +262,7 @@ public class BOSSMDClassifier extends MDClassifier {
     return p;
   }
 
-  protected Double[] predict(final Ensemble<BossMDModel<IntFloatHashMap>> model, final TimeSeries[] testSamples) {
+  protected Double[] predict(final Ensemble<BossMDModel<IntFloatHashMap>> model, final MultiDimTimeSeries[] testSamples) {
     @SuppressWarnings("unchecked")
     final List<Pair<Double, Integer>>[] testLabels = new List[testSamples.length];
     for (int i = 0; i < testLabels.length; i++) {
@@ -281,14 +279,14 @@ public class BOSSMDClassifier extends MDClassifier {
         // iterate each sample to classify
         for (int i = 0; i < model.size(); i++) {
           if (i % threads == id) {
-            final BossVSModel<IntFloatHashMap> score = model.get(i);
+            final BossMDModel<IntFloatHashMap> score = model.get(i);
             usedLengths.add(score.windowLength);
 
-            BOSSVS model = score.bossvs;
+            BOSSMD model = score.bossmd;
 
             // create words and BOSS boss for test samples
-            int[][] wordsTest = model.createWords(testSamples);
-            BagOfPattern[] bagTest = model.createBagOfPattern(wordsTest, testSamples, score.features);
+            int[][] wordsTest = model.createMDWords(testSamples);
+            BagOfPatternMD[] bagTest = model.createBagOfPattern(wordsTest, testSamples, score.features);
 
             Predictions p = predict(indicesTest, bagTest, score.idf);
 
@@ -302,6 +300,6 @@ public class BOSSMDClassifier extends MDClassifier {
       }
     });
 
-    return score("BOSS VS", testSamples, testLabels, usedLengths);
+    return score("BOSSMD", testSamples, testLabels, usedLengths);
   }
 }

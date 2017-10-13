@@ -90,7 +90,7 @@ public abstract class MDClassifier {
     public abstract Score eval(
             final MultiDimTimeSeries[] trainSamples, final MultiDimTimeSeries[] testSamples);
 
-    protected Predictions evalLabels(TimeSeries[] testSamples, Double[] labels) {
+    protected Predictions evalLabels(MultiDimTimeSeries[] testSamples, Double[] labels) {
         int correct = 0;
         for (int ind = 0; ind < testSamples.length; ind++) {
             correct += compareLabels(labels[ind],(testSamples[ind].getLabel()))? 1 : 0;

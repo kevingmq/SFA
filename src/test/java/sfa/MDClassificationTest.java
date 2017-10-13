@@ -6,8 +6,6 @@ import org.junit.runners.JUnit4;
 import sfa.classification.*;
 import sfa.timeseries.MultiDimTimeSeries;
 import sfa.timeseries.MultiDimTimeSeriesLoader;
-import sfa.timeseries.TimeSeries;
-import sfa.timeseries.TimeSeriesLoader;
 
 import java.io.File;
 import java.io.IOException;
@@ -93,7 +91,7 @@ public class MDClassificationTest {
                 MultiDimTimeSeries[] testSamples = MultiDimTimeSeriesLoader.loadDataset(sources_test, labels_test);
 
                 // The BOSS VS classifier
-                MDClassifier bossMD = new BOSSMDClassifier();
+                MDClassifier bossMD = new BOSSMDVSClassifier();
                 MDClassifier.Score scoreBOSSVS = bossMD.eval(trainSamples, testSamples);
                 System.out.println(s + ";" + scoreBOSSVS.toString());
 
