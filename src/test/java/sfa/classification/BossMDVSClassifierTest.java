@@ -8,11 +8,8 @@ public class BossMDVSClassifierTest extends AbstractClassifierMDTest{
     protected List<DataSet> getDataSets() {
         List<DataSet> dataSets=new ArrayList<>();
         //Coffee;BOSS VS;1.0;1.0
-        dataSets.add(new DataSet("Coffee", 1.0, 1.0));
-        //Beef;BOSS VS;1.0;0.833
-        dataSets.add(new DataSet("Beef", 1.0, 0.833));
-        //CBF;BOSS VS;1.0;0.998
-        dataSets.add(new DataSet("CBF", 1.0, 0.998));
+        dataSets.add(new DataSet("UCI/UCI-HAR-TOTAL-REAL", 1.0, 1.0));
+
         return dataSets;
     }
 

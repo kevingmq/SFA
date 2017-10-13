@@ -93,6 +93,7 @@ public class BOSSMD {
         TimeSeries[][] samplesSplited = splitMultiDimTimeSeries(numSources,samples);
 
         if (this.signature == null) {
+            this.signature = new SFA[numSources];
             for(int idSource = 0; idSource < numSources; idSource++) {
                 this.signature[idSource] = new SFA(SFA.HistogramType.EQUI_DEPTH);
                 this.signature[idSource].fitWindowing(samplesSplited[idSource], this.windowLength, this.maxF, this.alphabetSize, this.normMean, true);
