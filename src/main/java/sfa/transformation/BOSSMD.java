@@ -6,6 +6,7 @@ import sfa.classification.ParallelFor;
 import sfa.timeseries.MultiDimTimeSeries;
 import sfa.timeseries.TimeSeries;
 
+import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class BOSSMD {
@@ -18,7 +19,7 @@ public class BOSSMD {
     //public boolean lowerBounding;
     public SFA[] signature;
 
-    public final static int BLOCKS;
+    public static int BLOCKS;
 
     static {
         Runtime runtime = Runtime.getRuntime();
@@ -28,7 +29,7 @@ public class BOSSMD {
             BLOCKS = runtime.availableProcessors();
         }
 
-        //    BLOCKS = 1; // for testing purposes
+        BLOCKS = 1; // for testing purposes
     }
 
     public BOSSMD() {
@@ -37,12 +38,11 @@ public class BOSSMD {
     /**
      * Create a BOSS MD.
      *
-     * @param maxF          queryLength of the SFA words
-     * @param maxS          alphabet size
-     * @param windowLength  sub-sequence (window) queryLength used for extracting SFA words from
-     *                      time series.
-     * @param normMean      set to true, if mean should be set to 0 for a window
-     *
+     * @param maxF         queryLength of the SFA words
+     * @param maxS         alphabet size
+     * @param windowLength sub-sequence (window) queryLength used for extracting SFA words from
+     *                     time series.
+     * @param normMean     set to true, if mean should be set to 0 for a window
      */
     public BOSSMD(int maxF, int maxS, int windowLength, boolean normMean) {
         this.maxF = maxF;
@@ -67,7 +67,7 @@ public class BOSSMD {
         }
     }
 
-    private TimeSeries[][] splitMultiDimTimeSeries(int numSources, MultiDimTimeSeries[] samples){
+    private TimeSeries[][] splitMultiDimTimeSeries(int numSources, MultiDimTimeSeries[] samples) {
 
         TimeSeries[][] samplesModificado = new TimeSeries[numSources][samples.length];
         for (int indexOfSource = 0; indexOfSource < numSources; indexOfSource++) {
@@ -78,6 +78,7 @@ public class BOSSMD {
         }
         return samplesModificado;
     }
+
     /**
      * Create MD words for all samples
      *
@@ -87,14 +88,15 @@ public class BOSSMD {
     public int[][] createMDWords(final MultiDimTimeSeries[] samples) {
 
         final int numSources = samples[0].getNumSources();
-        final int[][] mdWords = null;
-        final int[][][] words = new int[numSources][samples.length][];
+        final int[][] mdWordsInt = new int[samples.length][];
+        final short[][][][] words = new short[samples.length][numSources][][];
+        int[] count = new int[samples.length];
 
-        TimeSeries[][] samplesSplited = splitMultiDimTimeSeries(numSources,samples);
+        TimeSeries[][] samplesSplited = splitMultiDimTimeSeries(numSources, samples);
 
         if (this.signature == null) {
             this.signature = new SFA[numSources];
-            for(int idSource = 0; idSource < numSources; idSource++) {
+            for (int idSource = 0; idSource < numSources; idSource++) {
                 this.signature[idSource] = new SFA(SFA.HistogramType.EQUI_DEPTH);
                 this.signature[idSource].fitWindowing(samplesSplited[idSource], this.windowLength, this.maxF, this.alphabetSize, this.normMean, true);
             }
@@ -107,28 +109,80 @@ public class BOSSMD {
                 for (int i = 0; i < samples.length; i++) {
                     if (i % BLOCKS == id) {
 
-                        for(int idSource = 0; idSource < numSources; idSource++){
+                        for (int idSource = 0; idSource < numSources; idSource++) {
                             short[][] sfaWords = BOSSMD.this.signature[idSource].transformWindowing(samplesSplited[idSource][i]);
-                            words[idSource][i] = new int[sfaWords.length];
-                            for (int j = 0; j < sfaWords.length; j++) {
-                                words[idSource][i][j] = (int) Words.createWord(sfaWords[j], BOSSMD.this.maxF, (byte) Words.binlog(BOSSMD.this.alphabetSize));
-                            }
+                            words[i][idSource] = sfaWords;
+
                         }
 
+                        short[][] mdWordsmerged = mergeSFAWords(words[i], numSources);
 
-
+                        mdWordsInt[i] = new int[mdWordsmerged.length];
+                        for (int j = 0; j < mdWordsmerged.length; j++) {
+                            mdWordsInt[i][j] = (int) Words.createWord(mdWordsmerged[j], BOSSMD.this.maxF, (byte) Words.binlog(BOSSMD.this.alphabetSize));
+                        }
                     }
                 }
             }
         });
 
-        return mdWords;
+        return mdWordsInt;
+    }
+
+    short[][] mergeSFAWords(short[][][] words, int numSources) {
+        int wordLength = numSources;
+        int countOfWords = words[0].length;
+        int countOfTotalWords = countOfWords * words[0][0].length;
+        short[][] result = new short[countOfTotalWords][numSources];
+        ArrayList<short[]> mylist = new ArrayList<>();
+        for (int i = 0; i < countOfWords; i++) {
+            short[][] output = merded(words, numSources, i);
+            for(int j =0; j < output.length; j++){
+                mylist.add(output[j]);
+            }
+        }
+        result = mylist.toArray(new short[][]{});
+       /* for (int idSource = 0; idSource < numSources; idSource++) {
+
+                short[][] t = words[idSource];
+
+                mdWords[idSource] = new int[twords.length];
+                for (int k = 0; k < twords.length; k++) {
+                    mdWords[idSource][k] = (int) Words.createWord(twords[k], BOSSMD.this.maxF, (byte) Words.binlog(BOSSMD.this.alphabetSize));
+                }
+
+        }*/
+
+        return result;
+    }
+
+    short[][] merded(short[][][] words, int numSources, int i_index) {
+
+
+        short[][] w = new short[numSources][];
+
+        for (int idSource = 0; idSource < numSources; idSource++) {
+            w[idSource] = words[idSource][i_index].clone();
+        }
+
+        int jMax = w[0].length;
+        int iMax = numSources;
+        short[][] mdwords = new short[jMax][iMax];
+
+        for (int i = 0; i < iMax; i++) {
+            for (int j = 0; j < jMax; j++) {
+                mdwords[j][i] = w[i][j];
+            }
+        }
+
+
+        return mdwords;
     }
 
     /**
      * Create the BOSS boss for a fixed window-queryLength and SFA word queryLength
      *
-     * @param mdWords      the SFA words of the time series
+     * @param mdWords    the SFA words of the time series
      * @param samples    the samples to be transformed
      * @param wordLength the SFA word queryLength
      * @return returns a BOSS boss for each time series in samples
@@ -157,7 +211,7 @@ public class BOSSMD {
                 if (word != lastWord) { // ignore adjacent samples
                     bagOfPatterns[j].bag.putOrAdd((int) word, (short) 1, (short) 1);
                 }
-                lastWord = word;
+                //lastWord = word;
             }
         }
 

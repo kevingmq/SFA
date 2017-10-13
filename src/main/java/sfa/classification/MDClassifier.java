@@ -31,7 +31,7 @@ public abstract class MDClassifier {
     protected static int MAX_WINDOW_LENGTH = 250;
 
     // Blocks for parallel execution
-    public final int BLOCKS = 8;
+    public final int BLOCKS = 1;
 
     static {
         Runtime runtime = Runtime.getRuntime();
@@ -40,6 +40,7 @@ public abstract class MDClassifier {
         } else {
             threads = runtime.availableProcessors();
         }
+        threads = 1;
     }
 
     public MDClassifier() {
