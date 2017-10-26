@@ -28,8 +28,8 @@ public class BOSSMDVSClassifier extends MDClassifier {
   // default training parameters
   public static double factor = 0.95;
 
-  public static int maxF = 16;
-  public static int minF = 4;
+  public static int maxF = 8;
+  public static int minF = 8;
   public static int maxS = 4;
 
   public static boolean normMagnitudes = false;

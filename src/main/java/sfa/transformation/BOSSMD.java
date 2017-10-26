@@ -130,13 +130,13 @@ public class BOSSMD {
     }
 
     short[][] mergeSFAWords(short[][][] words, int numSources) {
-        int wordLength = numSources;
         int countOfWords = words[0].length;
-        int countOfTotalWords = countOfWords * words[0][0].length;
-        short[][] result = new short[countOfTotalWords][numSources];
+        int wordLength = numSources*words[0][0].length;
+
+        short[][] result;
         ArrayList<short[]> mylist = new ArrayList<>();
         for (int i = 0; i < countOfWords; i++) {
-            short[][] output = merded(words, numSources, i);
+            short[][] output = merded(words, numSources, i,wordLength);
             for(int j =0; j < output.length; j++){
                 mylist.add(output[j]);
             }
@@ -156,27 +156,21 @@ public class BOSSMD {
         return result;
     }
 
-    short[][] merded(short[][][] words, int numSources, int i_index) {
+    short[][] merded(short[][][] words, int numSources, int i_index,int lenghtWord) {
 
 
-        short[][] w = new short[numSources][];
+        short[][] w = new short[1][lenghtWord];
+        int count = 0;
 
         for (int idSource = 0; idSource < numSources; idSource++) {
-            w[idSource] = words[idSource][i_index].clone();
-        }
-
-        int jMax = w[0].length;
-        int iMax = numSources;
-        short[][] mdwords = new short[jMax][iMax];
-
-        for (int i = 0; i < iMax; i++) {
-            for (int j = 0; j < jMax; j++) {
-                mdwords[j][i] = w[i][j];
+            short[] temp = words[idSource][i_index].clone();
+            for (int i_temp = 0; i_temp < temp.length;i_temp++) {
+                w[0][count] = temp[i_temp];
+                count++;
             }
         }
 
-
-        return mdwords;
+        return w;
     }
 
     /**
