@@ -26,10 +26,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class BOSSMDVSClassifier extends MDClassifier {
 
   // default training parameters
-  public static double factor = 0.95;
+  public static double factor = 0.90;
 
-  public static int maxF = 8;
-  public static int minF = 8;
+  public static int maxF = 10;
+  public static int minF = 10;
   public static int maxS = 4;
 
   public static boolean normMagnitudes = false;

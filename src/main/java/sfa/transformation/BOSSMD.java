@@ -29,7 +29,7 @@ public class BOSSMD {
             BLOCKS = runtime.availableProcessors();
         }
 
-        BLOCKS = 1; // for testing purposes
+        //BLOCKS = 1; // for testing purposes
     }
 
     public BOSSMD() {
@@ -131,7 +131,7 @@ public class BOSSMD {
 
     short[][] mergeSFAWords(short[][][] words, int numSources) {
         int countOfWords = words[0].length;
-        int wordLength = numSources*words[0][0].length;
+        int wordLength = words[0][0].length;
 
         short[][] result;
         ArrayList<short[]> mylist = new ArrayList<>();
@@ -158,19 +158,19 @@ public class BOSSMD {
 
     short[][] merded(short[][][] words, int numSources, int i_index,int lenghtWord) {
 
-
-        short[][] w = new short[1][lenghtWord];
+        int lenght = numSources*lenghtWord;
+        short[][] mdword = new short[1][lenght];
         int count = 0;
 
-        for (int idSource = 0; idSource < numSources; idSource++) {
-            short[] temp = words[idSource][i_index].clone();
-            for (int i_temp = 0; i_temp < temp.length;i_temp++) {
-                w[0][count] = temp[i_temp];
+        for(int j = 0; j < lenghtWord; j++){
+            for (int idSource = 0; idSource < numSources; idSource++) {
+                short c = words[idSource][i_index][j];
+                mdword[0][count] = c;
                 count++;
             }
         }
 
-        return w;
+        return mdword;
     }
 
     /**

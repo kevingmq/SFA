@@ -84,7 +84,7 @@ public class MDClassificationTest {
                     sources_test[4] = gy_test;
                     sources_test[5] = gz_test;
                 }
-                Classifier.DEBUG = true;
+                Classifier.DEBUG = false;
 
                 // Load the train/test splits
                 MultiDimTimeSeries[] trainSamples = MultiDimTimeSeriesLoader.loadDataset(sources_train, labels_train);

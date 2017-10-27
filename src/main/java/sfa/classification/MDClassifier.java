@@ -19,7 +19,7 @@ public abstract class MDClassifier {
 
     public static boolean[] NORMALIZATION = new boolean[]{true, false};
 
-    public static boolean DEBUG = true;
+    public static boolean DEBUG = false;
     public static boolean ENSEMBLE_WEIGHTS = true;
 
     public static int threads = 1;
@@ -31,7 +31,7 @@ public abstract class MDClassifier {
     protected static int MAX_WINDOW_LENGTH = 250;
 
     // Blocks for parallel execution
-    public final int BLOCKS = 1;
+    public final int BLOCKS = 8;
 
     static {
         Runtime runtime = Runtime.getRuntime();
@@ -40,7 +40,7 @@ public abstract class MDClassifier {
         } else {
             threads = runtime.availableProcessors();
         }
-        threads = 1;
+        //threads = 1;
     }
 
     public MDClassifier() {
