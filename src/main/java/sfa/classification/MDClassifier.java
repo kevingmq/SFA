@@ -1,6 +1,6 @@
 package sfa.classification;
 
-import java.io.IOException;
+
 import java.text.MessageFormat;
 import java.util.*;
 import java.util.Map.Entry;
@@ -9,10 +9,9 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 import com.carrotsearch.hppc.*;
 import sfa.timeseries.MultiDimTimeSeries;
-import com.carrotsearch.hppc.cursors.ObjectCursor;
 import com.carrotsearch.hppc.cursors.FloatCursor;
 import com.carrotsearch.hppc.cursors.IntCursor;
-import sfa.timeseries.TimeSeries;
+
 
 public abstract class MDClassifier {
     transient ExecutorService exec;
@@ -40,7 +39,6 @@ public abstract class MDClassifier {
         } else {
             threads = runtime.availableProcessors();
         }
-        //threads = 1;
     }
 
     public MDClassifier() {
@@ -97,60 +95,6 @@ public abstract class MDClassifier {
             correct += compareLabels(labels[ind],(testSamples[ind].getLabel()))? 1 : 0;
         }
         return new Predictions(labels, correct);
-    }
-
-    public static class Words {
-        public static int binlog(int bits) {
-            int log = 0;
-            if ((bits & 0xffff0000) != 0) {
-                bits >>>= 16;
-                log = 16;
-            }
-            if (bits >= 256) {
-                bits >>>= 8;
-                log += 8;
-            }
-            if (bits >= 16) {
-                bits >>>= 4;
-                log += 4;
-            }
-            if (bits >= 4) {
-                bits >>>= 2;
-                log += 2;
-            }
-            return log + (bits >>> 1);
-        }
-
-        public static long createWord(short[] words, int features, byte usedBits) {
-            return fromByteArrayOne(words, features, usedBits);
-        }
-
-        /**
-         * Returns a long containing the values in bytes.
-         *
-         * @param bytes
-         * @param to
-         * @param usedBits
-         * @return
-         */
-        public static long fromByteArrayOne(short[] bytes, int to, byte usedBits) {
-            int shortsPerLong = 60 / usedBits;
-            to = Math.min(bytes.length, to);
-
-            long bits = 0;
-            int start = 0;
-            long shiftOffset = 1;
-            for (int i = start, end = Math.min(to, shortsPerLong + start); i < end; i++) {
-                for (int j = 0, shift = 1; j < usedBits; j++, shift <<= 1) {
-                    if ((bytes[i] & shift) != 0) {
-                        bits |= shiftOffset;
-                    }
-                    shiftOffset <<= 1;
-                }
-            }
-
-            return bits;
-        }
     }
 
     public static class Model implements Comparable<Model> {
@@ -264,16 +208,6 @@ public abstract class MDClassifier {
             this.labels = labels;
             this.correct = new AtomicInteger(bestCorrect);
         }
-    }
-
-    public static void outputResult(int correct, long time, int testSize) {
-        double error = formatError(correct, testSize);
-        //String errorStr = MessageFormat.format("{0,number,#.##%}", error);
-        String correctStr = MessageFormat.format("{0,number,#.##%}", 1 - error);
-
-        System.out.print("Correct:\t");
-        System.out.print("" + correctStr + "");
-        System.out.println("\tTime: \t" + (System.currentTimeMillis() - time) / 1000.0 + " s");
     }
 
     public static double formatError(int correct, int testSize) {
@@ -437,7 +371,7 @@ public abstract class MDClassifier {
         if (DEBUG) {
             System.out.println(name + " Testing with " + currentWindowLengths.size() + " models:\t");
             System.out.println(currentWindowLengths.toString() + "\n");
-            //outputResult(correctTesting, startTime, samples.length);
+            //Classifier.outputResult(correctTesting, startTime, samples.length);
            // outputConfusionMatrix(confusionMatrix);
         }
         return predictedLabels;

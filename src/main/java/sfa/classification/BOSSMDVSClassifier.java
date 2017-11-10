@@ -34,7 +34,7 @@ public class BOSSMDVSClassifier extends MDClassifier {
 
   public static boolean normMagnitudes = false;
 
-  // the trained weasel
+  // the trained weaselmd
   public Ensemble<BossMDModel<IntFloatHashMap>> model;
 
   public BOSSMDVSClassifier() {
@@ -70,7 +70,7 @@ public class BOSSMDVSClassifier extends MDClassifier {
 
     if (DEBUG) {
       System.out.println(score.toString());
-      outputResult((int) score.training, startTime, testSamples.length);
+      Classifier.outputResult((int) score.training, startTime, testSamples.length);
       System.out.println("");
     }
 

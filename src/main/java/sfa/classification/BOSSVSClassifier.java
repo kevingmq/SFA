@@ -30,7 +30,7 @@ public class BOSSVSClassifier extends Classifier {
 
   public static boolean normMagnitudes = false;
 
-  // the trained weasel
+  // the trained weaselmd
   public Ensemble<BossVSModel<IntFloatHashMap>> model;
 
   public BOSSVSClassifier() {

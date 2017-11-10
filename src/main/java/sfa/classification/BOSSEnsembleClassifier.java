@@ -27,7 +27,7 @@ public class BOSSEnsembleClassifier extends Classifier {
   public static int minF = 6;
   public static int maxS = 4;
 
-  // the trained weasel
+  // the trained weaselmd
   public Ensemble<BOSSModel> model;
 
   public BOSSEnsembleClassifier() {
