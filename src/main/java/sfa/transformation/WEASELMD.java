@@ -10,7 +10,7 @@ import com.carrotsearch.hppc.cursors.IntIntCursor;
 import com.carrotsearch.hppc.cursors.LongFloatCursor;
 import sfa.classification.Classifier;
 import sfa.classification.ParallelFor;
-import sfa.timeseries.MultiDimTimeSeries;
+import har.timeseries.MultiDimTimeSeries;
 import sfa.timeseries.TimeSeries;
 
 import java.util.concurrent.atomic.AtomicInteger;

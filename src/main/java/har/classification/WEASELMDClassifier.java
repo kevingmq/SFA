@@ -1,10 +1,12 @@
 // Copyright (c) 2017 - Patrick Schäfer (patrick.schaefer@hu-berlin.de)
 // Distributed under the GLP 3.0 (See accompanying file LICENSE)
-package sfa.classification;
+package har.classification;
 
 import com.carrotsearch.hppc.cursors.IntIntCursor;
 import de.bwaldvogel.liblinear.*;
-import sfa.timeseries.MultiDimTimeSeries;
+import har.timeseries.MultiDimTimeSeries;
+import sfa.classification.Classifier;
+import sfa.classification.ParallelFor;
 import sfa.transformation.WEASELMD;
 import sfa.transformation.WEASELMD.BagOfBigrams;
 import sfa.transformation.WEASELMD.Dictionary;

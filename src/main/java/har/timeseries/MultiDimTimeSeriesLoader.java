@@ -1,4 +1,8 @@
-package sfa.timeseries;
+package har.timeseries;
+
+import har.timeseries.MultiDimTimeSeries;
+import sfa.timeseries.TimeSeries;
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;

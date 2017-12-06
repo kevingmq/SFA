@@ -1,23 +1,19 @@
-package sfa.transformation;
+package har.transformation;
 
-import com.carrotsearch.hppc.IntIntHashMap;
+import com.carrotsearch.hppc.LongIntHashMap;
 import sfa.classification.Classifier.Words;
 import sfa.classification.ParallelFor;
-import sfa.timeseries.MultiDimTimeSeries;
+import har.timeseries.MultiDimTimeSeries;
 import sfa.timeseries.TimeSeries;
+import sfa.transformation.BOSSVS;
+import sfa.transformation.SFA;
 
 import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class BOSSMD {
+public class BOSSMV extends BOSSVS {
 
-    public int alphabetSize;
-    public int maxF;
-
-    public int windowLength;
-    public boolean normMean;
-    //public boolean lowerBounding;
-    public SFA[] signature;
+    public SFA[] signatures;
 
     public static int BLOCKS;
 
@@ -32,7 +28,7 @@ public class BOSSMD {
         //BLOCKS = 1; // for testing purposes
     }
 
-    public BOSSMD() {
+    public BOSSMV() {
     }
 
     /**
@@ -44,9 +40,9 @@ public class BOSSMD {
      *                     time series.
      * @param normMean     set to true, if mean should be set to 0 for a window
      */
-    public BOSSMD(int maxF, int maxS, int windowLength, boolean normMean) {
+    public BOSSMV(int maxF, int maxS, int windowLength, boolean normMean) {
         this.maxF = maxF;
-        this.alphabetSize = maxS;
+        this.symbols = maxS;
         this.windowLength = windowLength;
         this.normMean = normMean;
     }
@@ -55,14 +51,11 @@ public class BOSSMD {
      * The BOSS MD: a histogram of MD word frequencies
      */
     public static class BagOfPatternMD {
-        public IntIntHashMap bag;
+        public LongIntHashMap bag;
         public Double label;
 
-        public BagOfPatternMD() {
-        }
-
         public BagOfPatternMD(int size, Double label) {
-            this.bag = new IntIntHashMap(size);
+            this.bag = new LongIntHashMap(size);
             this.label = label;
         }
     }
@@ -90,15 +83,15 @@ public class BOSSMD {
         final int numSources = samples[0].getNumSources();
         final int[][] mdWordsInt = new int[samples.length][];
         final short[][][][] words = new short[samples.length][numSources][][];
-        int[] count = new int[samples.length];
+
 
         TimeSeries[][] samplesSplited = splitMultiDimTimeSeries(numSources, samples);
 
-        if (this.signature == null) {
-            this.signature = new SFA[numSources];
+        if (this.signatures == null) {
+            this.signatures = new SFA[numSources];
             for (int idSource = 0; idSource < numSources; idSource++) {
-                this.signature[idSource] = new SFA(SFA.HistogramType.EQUI_DEPTH);
-                this.signature[idSource].fitWindowing(samplesSplited[idSource], this.windowLength, this.maxF, this.alphabetSize, this.normMean, true);
+                this.signatures[idSource] = new SFA(SFA.HistogramType.EQUI_DEPTH);
+                this.signatures[idSource].fitWindowing(samplesSplited[idSource], this.windowLength, this.maxF, this.symbols, this.normMean, true);
             }
         }
 
@@ -110,7 +103,7 @@ public class BOSSMD {
                     if (i % BLOCKS == id) {
 
                         for (int idSource = 0; idSource < numSources; idSource++) {
-                            short[][] sfaWords = BOSSMD.this.signature[idSource].transformWindowing(samplesSplited[idSource][i]);
+                            short[][] sfaWords = BOSSMV.this.signatures[idSource].transformWindowing(samplesSplited[idSource][i]);
                             words[i][idSource] = sfaWords;
 
                         }
@@ -119,7 +112,7 @@ public class BOSSMD {
 
                         mdWordsInt[i] = new int[mdWordsmerged.length];
                         for (int j = 0; j < mdWordsmerged.length; j++) {
-                            mdWordsInt[i][j] = (int) Words.createWord(mdWordsmerged[j], BOSSMD.this.maxF, (byte) Words.binlog(BOSSMD.this.alphabetSize));
+                            mdWordsInt[i][j] = (int) Words.createWord(mdWordsmerged[j], BOSSMV.this.maxF, (byte) Words.binlog(BOSSMV.this.symbols));
                         }
                     }
                 }
@@ -148,7 +141,7 @@ public class BOSSMD {
 
                 mdWords[idSource] = new int[twords.length];
                 for (int k = 0; k < twords.length; k++) {
-                    mdWords[idSource][k] = (int) Words.createWord(twords[k], BOSSMD.this.maxF, (byte) Words.binlog(BOSSMD.this.alphabetSize));
+                    mdWords[idSource][k] = (int) Words.createWord(twords[k], BOSSMV.this.maxF, (byte) Words.binlog(BOSSMV.this.alphabetSize));
                 }
 
         }*/
@@ -187,7 +180,7 @@ public class BOSSMD {
             final int wordLength) {
         BagOfPatternMD[] bagOfPatterns = new BagOfPatternMD[mdWords.length];
 
-        final byte usedBits = (byte) Words.binlog(this.alphabetSize);
+        final byte usedBits = (byte) Words.binlog(this.symbols);
         // FIXME
         // final long mask = (usedBits << wordLength) - 1l;
         final long mask = (1L << (usedBits * wordLength)) - 1L;

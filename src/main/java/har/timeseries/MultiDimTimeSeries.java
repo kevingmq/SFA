@@ -1,4 +1,6 @@
-package sfa.timeseries;
+package har.timeseries;
+
+import sfa.timeseries.TimeSeries;
 
 public class MultiDimTimeSeries {
 

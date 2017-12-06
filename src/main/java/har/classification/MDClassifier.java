@@ -1,16 +1,16 @@
-package sfa.classification;
+package har.classification;
 
 
-import java.text.MessageFormat;
 import java.util.*;
 import java.util.Map.Entry;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 import com.carrotsearch.hppc.*;
-import sfa.timeseries.MultiDimTimeSeries;
+import har.timeseries.MultiDimTimeSeries;
 import com.carrotsearch.hppc.cursors.FloatCursor;
 import com.carrotsearch.hppc.cursors.IntCursor;
+import sfa.classification.Ensemble;
 
 
 public abstract class MDClassifier {

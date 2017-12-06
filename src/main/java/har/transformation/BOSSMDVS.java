@@ -1,4 +1,4 @@
-package sfa.transformation;
+package har.transformation;
 
 import com.carrotsearch.hppc.IntFloatHashMap;
 import com.carrotsearch.hppc.IntShortHashMap;
@@ -13,7 +13,7 @@ import java.util.Set;
  *
  * @author bzcschae
  */
-public class BOSSMDVS extends BOSSMD {
+public class BOSSMDVS extends BOSSMV {
 
   public BOSSMDVS(){}
 

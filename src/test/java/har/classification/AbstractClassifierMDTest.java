@@ -1,12 +1,11 @@
-package sfa.classification;
+package har.classification;
 
-import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import sfa.SFAWordsTest;
-import sfa.timeseries.MultiDimTimeSeries;
-import sfa.timeseries.MultiDimTimeSeriesLoader;
+import har.timeseries.MultiDimTimeSeries;
+import har.timeseries.MultiDimTimeSeriesLoader;
 
 import java.io.File;
 import java.io.IOException;

@@ -7,7 +7,6 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import sfa.classification.*;
 import sfa.timeseries.MultiVariateTimeSeries;
-import sfa.timeseries.TimeSeries;
 import sfa.timeseries.TimeSeriesLoader;
 import sfa.transformation.MFT;
 

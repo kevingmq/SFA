@@ -10,8 +10,6 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
 import sfa.SFAWordsTest;
-import sfa.index.SFATrie;
-import sfa.index.SortedListMap;
 import sfa.timeseries.TimeSeries;
 import sfa.timeseries.TimeSeriesLoader;
 

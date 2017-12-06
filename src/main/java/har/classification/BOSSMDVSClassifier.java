@@ -1,15 +1,18 @@
 // Copyright (c) 2017 - Kevin Quispe (kgmq@icomp.ufam.edu.br)
 // Distributed under the GLP 3.0 (See accompanying file LICENSE)
-package sfa.classification;
+package har.classification;
 
 import com.carrotsearch.hppc.IntFloatHashMap;
 import com.carrotsearch.hppc.ObjectObjectHashMap;
-import com.carrotsearch.hppc.cursors.IntIntCursor;
+import com.carrotsearch.hppc.cursors.LongIntCursor;
 import com.carrotsearch.hppc.cursors.ObjectObjectCursor;
-import sfa.timeseries.MultiDimTimeSeries;
-import sfa.transformation.BOSSMD.BagOfPatternMD;
-import sfa.transformation.BOSSMD;
-import sfa.transformation.BOSSMDVS;
+import har.timeseries.MultiDimTimeSeries;
+import sfa.classification.Classifier;
+import sfa.classification.Ensemble;
+import sfa.classification.ParallelFor;
+import har.transformation.BOSSMV.BagOfPatternMD;
+import har.transformation.BOSSMV;
+import har.transformation.BOSSMDVS;
 
 
 import java.util.ArrayList;
@@ -47,7 +50,7 @@ public class BOSSMDVSClassifier extends MDClassifier {
     public BossMDModel(
             boolean normed,
             int windowLength) {
-      super("BOSSMD", -1, 1, -1, 1, normed, windowLength);
+      super("BOSSMV", -1, 1, -1, 1, normed, windowLength);
     }
 
     // The inverse document frequencies learned by training
@@ -78,7 +81,7 @@ public class BOSSMDVSClassifier extends MDClassifier {
     int correctTesting = score(testSamples).correct.get();
 
     return new Score(
-            "BOSSMD",
+            "BOSSMV",
             correctTesting, testSamples.length,
             score.training, trainSamples.length,
             score.windowLength);
@@ -232,9 +235,9 @@ public class BOSSMDVSClassifier extends MDClassifier {
 
               // determine cosine similarity
               double distance = 0.0;
-              for (IntIntCursor wordFreq : bagOfPatternsTestSamples[i].bag) {
+              for (LongIntCursor wordFreq : bagOfPatternsTestSamples[i].bag) {
                 double wordInBagFreq = wordFreq.value;
-                double value = stat.get(wordFreq.key);
+                double value = stat.get((int) wordFreq.key);
                 distance += wordInBagFreq * (value + 1.0);
               }
 
@@ -282,7 +285,7 @@ public class BOSSMDVSClassifier extends MDClassifier {
             final BossMDModel<IntFloatHashMap> score = model.get(i);
             usedLengths.add(score.windowLength);
 
-            BOSSMD model = score.bossmd;
+            BOSSMV model = score.bossmd;
 
             // create words and BOSS boss for test samples
             int[][] wordsTest = model.createMDWords(testSamples);
@@ -300,6 +303,6 @@ public class BOSSMDVSClassifier extends MDClassifier {
       }
     });
 
-    return score("BOSSMD", testSamples, testLabels, usedLengths);
+    return score("BOSSMV", testSamples, testLabels, usedLengths);
   }
 }
