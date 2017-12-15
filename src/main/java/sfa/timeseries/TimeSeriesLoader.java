@@ -2,16 +2,13 @@
 // Distributed under the GLP 3.0 (See accompanying file LICENSE)
 package sfa.timeseries;
 
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileReader;
-import java.io.IOException;
+import com.carrotsearch.hppc.DoubleArrayList;
+
+import java.io.*;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
-
-import com.carrotsearch.hppc.DoubleArrayList;
 
 public class TimeSeriesLoader {
 
@@ -79,6 +76,84 @@ public class TimeSeriesLoader {
 
     System.out.println("Done reading from " + dataset + " samples " + samples.size() + " queryLength " + samples.get(0).getLength());
     return samples.toArray(new TimeSeries[]{});
+  }
+
+  public static MultiVariateTimeSeries[] loadMultivariateDataset(File[] datasets, File labels) throws FileNotFoundException {
+    int numOfInstancias = 0;
+    int numSources = datasets.length;
+    ArrayList<String> labelsForEachWindowResult = new ArrayList<String>();
+    ArrayList<MultiVariateTimeSeries> instancias = new ArrayList<MultiVariateTimeSeries>();
+
+    try (BufferedReader br = new BufferedReader(new FileReader(labels))) {
+      String line = null;
+      String[] labelsForEachWindow = null;
+
+      while ((line = br.readLine()) != null) {
+        labelsForEachWindow = line.split(",");
+        int j = 0;
+
+        for (int i = 0; i < labelsForEachWindow.length; i++) {
+          String column = labelsForEachWindow[i].trim();
+          try {
+            if (isNonEmptyColumn(column)) {
+              labelsForEachWindowResult.add(column);
+            }
+          } catch (NumberFormatException nfe) {
+            nfe.printStackTrace();
+          }
+        }
+        numOfInstancias = labelsForEachWindowResult.size();
+      }
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
+
+    // Signals
+    BufferedReader[] readers = new BufferedReader[numSources];
+
+    for (int sourceId = 0; sourceId < numSources; sourceId++) {
+
+      readers[sourceId] = new BufferedReader(new FileReader(datasets[sourceId]));
+
+    }
+
+    try {
+      for (int iLine = 0; iLine < numOfInstancias; iLine++) {
+        double[][] lines = new double[numSources][];
+        for (int ireaders = 0; ireaders < numSources; ireaders++) {
+          String line = readers[ireaders].readLine();
+          if (line != null) {
+            String[] columns = line.split(",");
+            double[] dataOfOneLine = new double[columns.length];
+            int j = 0;
+            for (int i = 0; i < columns.length; i++) {
+              String column = columns[i].trim();
+              try {
+                if (isNonEmptyColumn(column)) {
+                  dataOfOneLine[j++] = Double.parseDouble(column);
+                }
+              } catch (NumberFormatException nfe) {
+                nfe.printStackTrace();
+              }
+            }
+            lines[ireaders] = dataOfOneLine;
+          }
+        }
+        TimeSeries[] tsdata = new TimeSeries[numSources];
+        for (int i = 0; i < numSources; i++) {
+          tsdata[i] = new TimeSeries(Arrays.copyOfRange(lines[i], 0, lines[i].length));
+        }
+
+        MultiVariateTimeSeries tsMD = new MultiVariateTimeSeries(tsdata,Double.parseDouble(labelsForEachWindowResult.get(iLine)));
+        instancias.add(tsMD);
+      }
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
+
+    //System.out.println("Done reading from " + dataset + " samples " + samples.size() + " length " + samples.get(0).getLength());
+    return instancias.toArray(new MultiVariateTimeSeries[]{});
+
   }
 
   public static MultiVariateTimeSeries[] loadMultivariateDatset(
@@ -239,5 +314,71 @@ public class TimeSeriesLoader {
     }
 
     return new TimeSeries(data);
+  }
+
+  public static MultiVariateTimeSeries[] loadMultivariateDataset(File dataset, int num_sources, int segment_length) {
+    ArrayList<MultiVariateTimeSeries> samples = new ArrayList<>();
+
+    try (BufferedReader br = new BufferedReader(new FileReader(dataset))) {
+      String line = null;
+      while ((line = br.readLine()) != null) {
+        if (line.startsWith("@")) {
+          continue;
+        }
+
+        String[] columns = line.split(",");
+
+
+        double[][] data = new double[num_sources][segment_length];
+        int idSource = 0;
+        int j = 0;
+        Double label = null;
+
+        // first is the label
+        int i = 0;
+        for (; i < columns.length; i++) {
+          String column = columns[i].trim();
+          if (isNonEmptyColumn(column)) {
+            label = Double.valueOf(column);
+            break;
+          }
+        }
+
+        // next the data
+        for (i = i + 1; i < columns.length && idSource < num_sources; i++) {
+          String column = columns[i].trim();
+          try {
+            if (isNonEmptyColumn(column)) {
+              if (j == segment_length) {
+                idSource++;
+                j = 0;
+              }
+              if(idSource < num_sources) {
+                data[idSource][j++] = Double.parseDouble(column);
+              }
+
+            }
+          } catch (NumberFormatException nfe) {
+            nfe.printStackTrace();
+          }
+        }
+        ArrayList<TimeSeries> tempArray = new ArrayList<>();
+        for (idSource = 0; idSource < num_sources; idSource++) {
+          TimeSeries ts = new TimeSeries(Arrays.copyOf(data[idSource],segment_length),label);
+          ts.norm();
+          tempArray.add(ts);
+        }
+
+        MultiVariateTimeSeries r = new MultiVariateTimeSeries(tempArray.toArray(new TimeSeries[]{}),label);
+        samples.add(r);
+
+      }
+
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
+
+    System.out.println("Done reading from " + dataset + " samples " + samples.size() + " queryLength " + samples.get(0).getLength() + " num_sources " + num_sources);
+    return samples.toArray(new MultiVariateTimeSeries[]{});
   }
 }
