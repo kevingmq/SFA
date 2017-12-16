@@ -25,34 +25,33 @@ public class MainSubjectDependent {
     public void testSubjectDependentClassification() throws IOException {
         try {
             // the relative path to the datasets
+
+            boolean DEBUG = false;
             ClassLoader classLoader = SFAWordsTest.class.getClassLoader();
 
             File dir = new File(classLoader.getResource("datasets/").getFile());
 
             for (String s : datasets) {
                 File d = new File(dir.getAbsolutePath() + "/" + s);
-
+                System.out.println("dataset,userId,numSources,timeSeconds,alfabet,wordLength,windowLength,normMean,Accuracy");
                 if (d.exists() && d.isDirectory()) {
                     for (File train : d.listFiles()) {
 
                         int num_sources = 3;
                         int segment_length = 200;
                         String filename = train.getName();
-
+                        Classifier.DEBUG = DEBUG;
+                        TimeSeriesLoader.DEBUG = DEBUG;
                         MultiVariateTimeSeries[] trainSamples = TimeSeriesLoader.loadMultivariateDataset(train, num_sources, segment_length);
                         BOSSMDStackClassifier stack = new BOSSMDStackClassifier();
-                        stack.evalCrossValidation(trainSamples);
-                        //Classifier.DEBUG = true;
+                        String result = stack.evalCrossValidation(trainSamples);
 
-                        //boolean useDerivatives = true;
+                        // output = WISDM-MDU,user1,resutl
 
-                        System.out.println(s + ";" + filename + ";");
+
+                        System.out.println(s + "," + filename + "," + num_sources + "," + result);
                     }
                 }
-
-                System.out.println("==============");
-                System.out.println("= " + d.getName() + " =");
-                System.out.println("======FIM=====");
 
             }
         } finally {

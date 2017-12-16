@@ -2,6 +2,8 @@ package sfa.classification;
 
 import com.carrotsearch.hppc.IntFloatHashMap;
 import com.carrotsearch.hppc.ObjectObjectHashMap;
+import com.carrotsearch.hppc.cursors.IntIntCursor;
+import com.carrotsearch.hppc.cursors.ObjectObjectCursor;
 import sfa.timeseries.MultiVariateTimeSeries;
 import sfa.timeseries.TimeSeries;
 import sfa.transformation.BOSSMDStackVS;
@@ -17,11 +19,11 @@ public class BOSSMDStackClassifier extends Classifier{
     // default training parameters
     public static double factor = 0.90;
 
-    public static int maxF = 10;
-    public static int minF = 10;
+    public static int maxF = 12;
+    public static int minF = 2;
     public static int maxS = 4;
 
-
+    public static boolean normMagnitudes = false;
 
     public BOSSMDStackClassifier(){
         super();
@@ -69,11 +71,13 @@ public class BOSSMDStackClassifier extends Classifier{
     }
 
 
-    public Score fit(final MultiVariateTimeSeries[] trainSamples) {
+    public Ensemble<BOSSMDStackModel<IntFloatHashMap>> fit(final MultiVariateTimeSeries[] trainSamples) {
+
         // generate test train/split for cross-validation
         generateIndices(trainSamples);
 
-        Score bestScore = null;
+        Ensemble<BOSSMDStackModel<IntFloatHashMap>> resultFit = null;
+
         int bestCorrectTraining = 0;
 
         int minWindowLength = 10;
@@ -87,23 +91,25 @@ public class BOSSMDStackClassifier extends Classifier{
         for (int c = minWindowLength; c <= maxWindowLength; c += distance) {
             windows.add(c);
         }
-
+        long startTime = System.currentTimeMillis();
         for (boolean normMean : NORMALIZATION) {
             // train the shotgun models for different window lengths
             Ensemble<BOSSMDStackModel<IntFloatHashMap>> model = fitEnsemble(windows.toArray(new Integer[]{}), normMean, trainSamples);
+            BOSSMDStackModel<IntFloatHashMap> bestModel = model.getHighestScoringModel();
+            if (DEBUG) {
+                System.out.println("BOSSMDStackVS " + " Training:\t S_" + maxS + " F_" + bestModel.features + "\tw_" + bestModel.windowLength + "\tnormed: \t" + normMean);
+                outputResult(bestModel.score.training, startTime, trainSamples.length);
+            }
 
-            //Double[] labels = predict(model, trainSamples);
-            //Predictions pred = evalLabels(trainSamples, labels);
+            if (bestCorrectTraining <= bestModel.score.training) {
+                bestCorrectTraining = bestModel.score.training;
+                resultFit = model;
 
-            /*if (bestCorrectTraining <= pred.correct.get()) {
-                bestCorrectTraining = pred.correct.get();
-                bestScore = model.getHighestScoringModel().score;
-                bestScore.training = pred.correct.get();
-                this.model = model;
-            }*/
+            }
+            startTime = System.currentTimeMillis();
         }
 
-        return null;
+        return resultFit;
     }
 
     public Predictions score(final MultiVariateTimeSeries[] testSamples) {
@@ -111,19 +117,94 @@ public class BOSSMDStackClassifier extends Classifier{
     }
 
 
-    public Double[] predict(final MultiVariateTimeSeries[] testSamples) {
-        return new Double[0];
+    public Predictions predict(final int[] indices,
+                            final BagOfPattern[] bagOfPatternsTestSamples,
+                            final ObjectObjectHashMap<Double, IntFloatHashMap> matrixTrain) {
+
+        Predictions p = new Predictions(new Double[bagOfPatternsTestSamples.length], 0);
+
+        ParallelFor.withIndex(BLOCKS, new ParallelFor.Each() {
+            @Override
+            public void run(int id, AtomicInteger processed) {
+                // iterate each sample to classify
+                for (int i : indices) {
+                    if (i % BLOCKS == id) {
+                        double bestDistance = 0.0;
+
+                        // for each class
+                        for (ObjectObjectCursor<Double, IntFloatHashMap> classEntry : matrixTrain) {
+
+                            Double label = classEntry.key;
+                            IntFloatHashMap stat = classEntry.value;
+
+                            // determine cosine similarity
+                            double distance = 0.0;
+                            for (IntIntCursor wordFreq : bagOfPatternsTestSamples[i].bag) {
+                                double wordInBagFreq = wordFreq.value;
+                                double value = stat.get(wordFreq.key);
+                                distance += wordInBagFreq * (value + 1.0);
+                            }
+
+                            // norm by magnitudes
+                            if (normMagnitudes) {
+                                distance /= magnitude(stat.values());
+                            }
+
+                            // update nearest neighbor
+                            if (distance > bestDistance) {
+                                bestDistance = distance;
+                                p.labels[i] = label;
+                            }
+                        }
+
+                        // check if the prediction is correct
+                        if (compareLabels(bagOfPatternsTestSamples[i].label, p.labels[i])) {
+                            p.correct.incrementAndGet();
+                        }
+                    }
+                }
+            }
+        });
+
+        return p;
     }
 
     public Score eval(final MultiVariateTimeSeries[] trainSamples, final MultiVariateTimeSeries[] testSamples) {
         return null;
     }
-    public Score evalCrossValidation(final MultiVariateTimeSeries[] trainSamples) {
-        long startTime = System.currentTimeMillis();
+    public String evalCrossValidation(final MultiVariateTimeSeries[] trainSamples) {
+        ArrayList<String> output = new ArrayList<>();
+        long startTimeFit = System.currentTimeMillis();
 
-        Score score = fit(trainSamples);
+        Ensemble<BOSSMDStackModel<IntFloatHashMap>> ensemble = fit(trainSamples);
 
-        return null;
+        //Prints
+        final BOSSMDStackModel<IntFloatHashMap> highestScoringModel = ensemble.getHighestScoringModel();
+        output.add(String.valueOf((System.currentTimeMillis() - startTimeFit) / 1000.0));
+        output.add(String.valueOf(highestScoringModel.bossmd.alphabetSize));
+        output.add(String.valueOf(highestScoringModel.features));
+        output.add(String.valueOf(highestScoringModel.score.windowLength));
+        output.add(String.valueOf(highestScoringModel.normed));
+        output.add(String.valueOf(highestScoringModel.score.getTrainingAccuracy()));
+        return listToCsv(output,',');
+        //time,alfabet,wordLenght,windowLength,normMean,accuracy,recall,f1,
+
+    }
+    protected String listToCsv(List<String> listOfStrings, char separator) {
+        StringBuilder sb = new StringBuilder();
+
+        // all but last
+        for(int i = 0; i < listOfStrings.size() - 1 ; i++) {
+            sb.append(listOfStrings.get(i));
+            sb.append(separator);
+        }
+
+        // last string, no separator
+        if(listOfStrings.size() > 0){
+            sb.append(listOfStrings.get(listOfStrings.size()-1));
+        }
+
+        return sb.toString();
     }
 
     protected Ensemble<BOSSMDStackModel<IntFloatHashMap>> fitEnsemble(Integer[] windows,
@@ -149,38 +230,38 @@ public class BOSSMDStackClassifier extends Classifier{
                             for (int f = minF; f <= Math.min(model.windowLength, maxF); f += 2) {
                                 BagOfPattern[] bag = bossmd.createBagOfPattern(words, samples, f);
 
-                               // cross validation using folds
+                                // cross validation using folds
                                 int correct = 0;
-                              /*  for (int s = 0; s < folds; s++) {
+                                for (int s = 0; s < folds; s++) {
                                     // calculate the tf-idf for each class
                                     ObjectObjectHashMap<Double, IntFloatHashMap> idf = bossmd.createTfIdf(bag,
                                             BOSSMDStackClassifier.this.trainIndices[s], this.uniqueLabels);
-
-                                    correct += predict(BOSSMDStackClassifier.this.testIndices[s], bag, idf).correct.get();
+                                    correct += predict(testIndices[s], bag, idf).correct.get();
                                 }
                                 if (correct > model.score.training) {
                                     model.score.training = correct;
+                                    model.score.trainSize = samples.length;
                                     model.features = f;
 
                                     if (correct == samples.length) {
                                         break;
                                     }
-                                }*/
+                                }
                             }
 
                             // obtain the final matrix
-                           /* BagOfPattern[] bag = bossmd.createBagOfPattern(words, samples, model.features);
+                            BagOfPattern[] bag = bossmd.createBagOfPattern(words, samples, model.features);
 
                             // calculate the tf-idf for each class
                             model.idf = bossmd.createTfIdf(bag, this.uniqueLabels);
-                            model.bossmd = bossmd;*/
+                            model.bossmd = bossmd;
 
                         } catch (Exception e) {
                             e.printStackTrace();
                         }
 
                         // keep best scores
-                       /* synchronized (correctTraining) {
+                        synchronized (correctTraining) {
                             if (model.score.training > correctTraining.get()) {
                                 correctTraining.set(model.score.training);
                             }
@@ -189,7 +270,7 @@ public class BOSSMDStackClassifier extends Classifier{
                             if (model.score.training >= correctTraining.get() * factor) {
                                 results.add(model);
                             }
-                        }*/
+                        }
                     }
                 }
             }

@@ -1,7 +1,7 @@
 package sfa.transformation;
 
-import com.carrotsearch.hppc.IntLongHashMap;
-import com.carrotsearch.hppc.LongIntHashMap;
+import com.carrotsearch.hppc.*;
+import com.carrotsearch.hppc.cursors.*;
 import sfa.classification.Classifier;
 import sfa.classification.ParallelFor;
 import sfa.timeseries.MultiVariateTimeSeries;
@@ -10,6 +10,7 @@ import sfa.transformation.MUSE.Dictionary;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class BOSSMDStackVS {
@@ -45,11 +46,11 @@ public class BOSSMDStackVS {
     }
 
     public static class BagOfPattern {
-        public IntLongHashMap bag;
+        public IntIntHashMap bag;
         public Double label;
 
         public BagOfPattern(int size, Double label) {
-            this.bag = new IntLongHashMap(size);
+            this.bag = new IntIntHashMap(size);
             this.label = label;
         }
     }
@@ -124,11 +125,11 @@ public class BOSSMDStackVS {
 
         // iterate all samples
         for(int index = 0; index < samples.length; index++){
+
+            BagOfPattern bop = new BagOfPattern(100, samples[index].getLabel());
             for (int idSource = 0; idSource < dimensionality; idSource++) {
-                BagOfPattern bop = new BagOfPattern(100, samples[index].getLabel());
 
                 // create subsequences
-
                 String dLabel = String.valueOf(idSource);
 
                 for (int offset = 0; offset < words[index][idSource].length; offset++) {
@@ -136,12 +137,109 @@ public class BOSSMDStackVS {
                     int dict = this.dict.getWord(word);
                     bop.bag.putOrAdd(dict,1,1);
                 }
-                bagOfPatterns.add(bop);
             }
+            bagOfPatterns.add(bop);
         }
 
         return bagOfPatterns.toArray(new BagOfPattern[]{});
     }
 
+    public ObjectObjectHashMap<Double, IntFloatHashMap> createTfIdf(
+            final BagOfPattern[] bagOfPatterns,
+            final Set<Double> uniqueLabels) {
+        int[] sampleIndices = createIndices(bagOfPatterns.length);
+        return createTfIdf(bagOfPatterns, sampleIndices, uniqueLabels);
+    }
 
+    protected static int[] createIndices(int length) {
+        int[] indices = new int[length];
+        for (int i = 0; i < length; i++) {
+            indices[i] = i;
+        }
+        return indices;
+    }
+
+    public ObjectObjectHashMap<Double, IntFloatHashMap> createTfIdf(
+            final BagOfPattern[] bagOfPatterns,
+            final int[] sampleIndices,
+            final Set<Double> uniqueLabels) {
+
+        ObjectObjectHashMap<Double, IntFloatHashMap> matrix = new ObjectObjectHashMap<>(
+                uniqueLabels.size());
+        initMatrix(matrix, uniqueLabels, bagOfPatterns);
+
+        for (int j : sampleIndices) {
+            Double label = bagOfPatterns[j].label;
+            IntFloatHashMap wordInBagFreq = matrix.get(label);
+            for (IntIntCursor key : bagOfPatterns[j].bag) {
+                wordInBagFreq.putOrAdd(key.key, key.value, key.value);
+            }
+        }
+
+        // count the number of classes where the word is present
+        IntShortHashMap wordInClassFreq = new IntShortHashMap(matrix.iterator().next().value.size());
+
+        for (ObjectCursor<IntFloatHashMap> stat : matrix.values()) {
+            // count the occurrence of words
+            for (IntFloatCursor key : stat.value) {
+                wordInClassFreq.putOrAdd(key.key, (short) 1, (short) 1);
+            }
+        }
+
+        // calculate the tfIDF value for each class
+        for (ObjectObjectCursor<Double, IntFloatHashMap> stat : matrix) {
+            IntFloatHashMap tfIDFs = stat.value;
+            // calculate the tfIDF value for each word
+            for (IntFloatCursor patternFrequency : tfIDFs) {
+                short wordCount = wordInClassFreq.get(patternFrequency.key);
+                if (patternFrequency.value > 0
+                        && uniqueLabels.size() != wordCount // avoid Math.log(1)
+                        ) {
+                    double tfValue = 1.0 + Math.log10(patternFrequency.value); // smoothing
+                    double idfValue = Math.log10(1.0 + uniqueLabels.size() / (double) wordCount); // smoothing
+                    double tfIdf = tfValue / idfValue;
+
+                    // update the tfIDF vector
+                    tfIDFs.values[patternFrequency.index] = (float) tfIdf;
+                } else {
+                    tfIDFs.values[patternFrequency.index] = 0;
+                }
+            }
+        }
+
+        // norm the tf-idf-matrix
+        normalizeTfIdf(matrix);
+
+        return matrix;
+    }
+
+    protected void initMatrix(
+            final ObjectObjectHashMap<Double, IntFloatHashMap> matrix,
+            final Set<Double> uniqueLabels,
+            final BagOfPattern[] bag) {
+        for (Double label : uniqueLabels) {
+            IntFloatHashMap stat = matrix.get(label);
+            if (stat == null) {
+                matrix.put(label, new IntFloatHashMap(bag[0].bag.size() * bag.length));
+            } else {
+                stat.clear();
+            }
+        }
+    }
+
+    public void normalizeTfIdf(final ObjectObjectHashMap<Double, IntFloatHashMap> classStatistics) {
+        for (ObjectCursor<IntFloatHashMap> classStat : classStatistics.values()) {
+            double squareSum = 0.0;
+            for (FloatCursor entry : classStat.value.values()) {
+                squareSum += entry.value * entry.value;
+            }
+            double squareRoot = Math.sqrt(squareSum);
+            if (squareRoot > 0) {
+                for (FloatCursor entry : classStat.value.values()) {
+                    //entry.value /= squareRoot;
+                    classStat.value.values[entry.index] /= squareRoot;
+                }
+            }
+        }
+    }
 }

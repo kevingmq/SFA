@@ -29,7 +29,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public abstract class Classifier {
     transient ExecutorService exec;
 
-    public static boolean[] NORMALIZATION = new boolean[]{true, false};
+    public static boolean[] NORMALIZATION = new boolean[]{false, true};
 
     public static boolean DEBUG = false;
     public static boolean ENSEMBLE_WEIGHTS = true;
