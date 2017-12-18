@@ -10,6 +10,7 @@ import sfa.transformation.BOSSMDStackVS;
 import sfa.transformation.BOSSMDStackVS.BagOfPattern;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -24,6 +25,9 @@ public class BOSSMDStackClassifier extends Classifier{
     public static int maxS = 4;
 
     public static boolean normMagnitudes = false;
+
+    // the trained weasel
+    public Ensemble<BOSSMDStackModel<IntFloatHashMap>> model;
 
     public BOSSMDStackClassifier(){
         super();
@@ -113,7 +117,8 @@ public class BOSSMDStackClassifier extends Classifier{
     }
 
     public Predictions score(final MultiVariateTimeSeries[] testSamples) {
-        return null;
+        Double[] labels = predict(testSamples);
+        return evalLabels(testSamples, labels);
     }
 
 
@@ -170,26 +175,40 @@ public class BOSSMDStackClassifier extends Classifier{
     }
 
     public Score eval(final MultiVariateTimeSeries[] trainSamples, final MultiVariateTimeSeries[] testSamples) {
-        return null;
-    }
-    public String evalCrossValidation(final MultiVariateTimeSeries[] trainSamples) {
         ArrayList<String> output = new ArrayList<>();
         long startTimeFit = System.currentTimeMillis();
 
-        Ensemble<BOSSMDStackModel<IntFloatHashMap>> ensemble = fit(trainSamples);
+        this.model = fit(trainSamples);
 
         //Prints
-        final BOSSMDStackModel<IntFloatHashMap> highestScoringModel = ensemble.getHighestScoringModel();
+        final BOSSMDStackModel<IntFloatHashMap> highestScoringModel = this.model.getHighestScoringModel();
+
         output.add(String.valueOf((System.currentTimeMillis() - startTimeFit) / 1000.0));
+
+        long startTimePredict = System.currentTimeMillis();
+        // Classify: testing score
+        Predictions p = score(testSamples);
+        output.add(String.valueOf((System.currentTimeMillis() - startTimePredict) / 1000.0));
+
+        int correctTesting = p.correct.get();
+        double error = formatError(correctTesting,testSamples.length);
+
         output.add(String.valueOf(highestScoringModel.bossmd.alphabetSize));
         output.add(String.valueOf(highestScoringModel.features));
         output.add(String.valueOf(highestScoringModel.score.windowLength));
         output.add(String.valueOf(highestScoringModel.normed));
-        output.add(String.valueOf(highestScoringModel.score.getTrainingAccuracy()));
-        return listToCsv(output,',');
-        //time,alfabet,wordLenght,windowLength,normMean,accuracy,recall,f1,
 
+       // output.add(String.valueOf(1-error));
+        String outputString = listToCsv(output,',');
+
+        return new Score(
+                "BOSS MDStack",
+                correctTesting, testSamples.length,
+                highestScoringModel.score.training, trainSamples.length,
+                highestScoringModel.score.windowLength, outputString ,p.getConfusionMatrix());
     }
+
+
     protected String listToCsv(List<String> listOfStrings, char separator) {
         StringBuilder sb = new StringBuilder();
 
@@ -236,7 +255,8 @@ public class BOSSMDStackClassifier extends Classifier{
                                     // calculate the tf-idf for each class
                                     ObjectObjectHashMap<Double, IntFloatHashMap> idf = bossmd.createTfIdf(bag,
                                             BOSSMDStackClassifier.this.trainIndices[s], this.uniqueLabels);
-                                    correct += predict(testIndices[s], bag, idf).correct.get();
+                                    Predictions p = predict(testIndices[s], bag, idf);
+                                    correct += p.correct.get();
                                 }
                                 if (correct > model.score.training) {
                                     model.score.training = correct;
@@ -278,5 +298,50 @@ public class BOSSMDStackClassifier extends Classifier{
 
         // returns the ensemble based on the best window-lengths within factor
         return filterByFactor(results, correctTraining.get(), factor);
+    }
+
+    protected Double[] predict(final Ensemble<BOSSMDStackModel<IntFloatHashMap>> model, final MultiVariateTimeSeries[] testSamples) {
+
+        final List<Pair<Double, Integer>>[] testLabels = new List[testSamples.length];
+        for (int i = 0; i < testLabels.length; i++) {
+            testLabels[i] = new ArrayList<>();
+        }
+
+        final List<Integer> usedLengths = Collections.synchronizedList(new ArrayList<>(model.size()));
+        final int[] indicesTest = createIndices(testSamples.length);
+
+        // parallel execution
+        ParallelFor.withIndex(exec, threads, new ParallelFor.Each() {
+            @Override
+            public void run(int id, AtomicInteger processed) {
+                // iterate each sample to classify
+                for (int i = 0; i < model.size(); i++) {
+                    if (i % threads == id) {
+                        final BOSSMDStackModel<IntFloatHashMap> score = model.get(i);
+                        usedLengths.add(score.windowLength);
+
+                        BOSSMDStackVS model = score.bossmd;
+
+                        // create words and BOSS boss for test samples
+                        int[][][] wordsTest = model.createWords(testSamples);
+                        BagOfPattern[] bagTest = model.createBagOfPattern(wordsTest, testSamples, score.features);
+
+                        Predictions p = predict(indicesTest, bagTest, score.idf);
+
+                        for (int j = 0; j < p.labels.length; j++) {
+                            synchronized (testLabels[j]) {
+                                testLabels[j].add(new Pair<>(p.labels[j], score.score.training));
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        return score("BOSS MDStack", testSamples, testLabels, usedLengths);
+    }
+
+    public Double[] predict(final MultiVariateTimeSeries[] testSamples) {
+        return predict(this.model, testSamples);
     }
 }

@@ -12,13 +12,17 @@ import sfa.timeseries.TimeSeriesLoader;
 
 import java.io.File;
 import java.io.IOException;
+import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
+import java.util.ArrayList;
+import java.util.Locale;
 
 @RunWith(JUnit4.class)
 public class MainSubjectDependent {
 
     // The multivariate datasets to use
     public static String[] datasets = new String[]{
-            "WISDM-MDU",
+            "WISDM-MDU-6C",
     };
 
     @Test
@@ -33,8 +37,10 @@ public class MainSubjectDependent {
 
             for (String s : datasets) {
                 File d = new File(dir.getAbsolutePath() + "/" + s);
-                System.out.println("dataset,userId,numSources,timeSeconds,alfabet,wordLength,windowLength,normMean,Accuracy");
+                System.out.println("dataset,userId,numSources,timeSecondsFit,timeSecondsPredict,alfabet,wordLength,windowLength,normMean,Accuracy");
                 if (d.exists() && d.isDirectory()) {
+
+
                     for (File train : d.listFiles()) {
 
                         int num_sources = 3;
@@ -42,14 +48,39 @@ public class MainSubjectDependent {
                         String filename = train.getName();
                         Classifier.DEBUG = DEBUG;
                         TimeSeriesLoader.DEBUG = DEBUG;
-                        MultiVariateTimeSeries[] trainSamples = TimeSeriesLoader.loadMultivariateDataset(train, num_sources, segment_length);
-                        BOSSMDStackClassifier stack = new BOSSMDStackClassifier();
-                        String result = stack.evalCrossValidation(trainSamples);
+                        MultiVariateTimeSeries[] allSamples = TimeSeriesLoader.loadMultivariateDataset(train, num_sources, segment_length);
 
-                        // output = WISDM-MDU,user1,resutl
+                        int folds = 10;
+                        int[][] testIndices = new int[folds][];
+                        int[][] trainIndices = new int[folds][];
 
+                        Classifier.generateIndicesStatic(allSamples, folds,trainIndices,testIndices);
 
-                        System.out.println(s + "," + filename + "," + num_sources + "," + result);
+                        double somaAccuracy = 0;
+                        double somaPrecision = 0;
+                        double somaRecall= 0;
+                        double somafmeasure = 0;
+
+                        for (int f = 0; f < folds; f++){
+
+                            MultiVariateTimeSeries[] trainSamples = getSamplesUsingIndes(allSamples,trainIndices[f]);
+                            MultiVariateTimeSeries[] testSamples = getSamplesUsingIndes(allSamples,testIndices[f]);
+                            BOSSMDStackClassifier stack = new BOSSMDStackClassifier();
+                            Classifier.Score result = stack.eval(trainSamples,testSamples);
+
+                            somaAccuracy += result.confusionMatrix.getAccuracy();
+                            somaPrecision += result.confusionMatrix.getAvgPrecision();
+                            somaRecall += result.confusionMatrix.getAvgRecall();
+                            somafmeasure += result.confusionMatrix.getMacroFMeasure();
+                            if(DEBUG) {
+                                System.out.println(result.outputString);
+                            }
+
+                        }
+                        DecimalFormatSymbols otherSymbols = new DecimalFormatSymbols(Locale.getDefault());
+                        otherSymbols.setDecimalSeparator('.');
+                        DecimalFormat df = new DecimalFormat("#.00",otherSymbols);
+                        System.out.println(s + "," + filename + "," + num_sources + "," + allSamples.length + "," + df.format(somaAccuracy/ folds * 100) + "," + df.format(somaPrecision/ folds * 100) + "," + df.format(somaRecall/ folds * 100) + "," + df.format(somafmeasure/ folds * 100));
                     }
                 }
 
@@ -57,6 +88,16 @@ public class MainSubjectDependent {
         } finally {
             ParallelFor.shutdown();
         }
+    }
+
+    private MultiVariateTimeSeries[] getSamplesUsingIndes(MultiVariateTimeSeries[] allSamples, int[] indices) {
+        MultiVariateTimeSeries[] result = new MultiVariateTimeSeries[indices.length];
+        int count = 0;
+        for (int i : indices) {
+            result[count] = allSamples[i];
+            count++;
+        }
+        return result;
     }
 
 }

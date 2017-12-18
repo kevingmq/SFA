@@ -11,6 +11,7 @@ import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import de.bwaldvogel.liblinear.*;
+import sfa.metrics.ConfusionMatrix;
 import sfa.timeseries.MultiVariateTimeSeries;
 import sfa.timeseries.TimeSeries;
 import sfa.transformation.MFT;
@@ -115,10 +116,13 @@ public abstract class Classifier {
 
     protected Predictions evalLabels(MultiVariateTimeSeries[] testSamples, Double[] labels) {
         int correct = 0;
+        Double[] goldLabels = new Double[labels.length];
         for (int ind = 0; ind < testSamples.length; ind++) {
-            correct += compareLabels(labels[ind], (testSamples[ind].getLabel())) ? 1 : 0;
+            Double gold = testSamples[ind].getLabel();
+            goldLabels[ind] = gold;
+            correct += compareLabels(labels[ind], gold) ? 1 : 0;
         }
-        return new Predictions(labels, correct);
+        return new Predictions(labels, correct, goldLabels);
     }
 
     public static class Words {
@@ -223,6 +227,8 @@ public abstract class Classifier {
     }
 
     public static class Score implements Comparable<Score> {
+        public String outputString;
+        public ConfusionMatrix confusionMatrix;
         public String name;
         public int training;
         public int trainSize;
@@ -240,6 +246,26 @@ public abstract class Classifier {
                 int training,
                 int trainSize,
                 int windowLength
+
+                ) {
+            this.name = name;
+            this.training = training;
+            this.trainSize = trainSize;
+            this.testing = testing;
+            this.testSize = testSize;
+            this.windowLength = windowLength;
+
+        }
+
+        public Score(
+                String name,
+                int testing,
+                int testSize,
+                int training,
+                int trainSize,
+                int windowLength,
+                String outputString,
+                ConfusionMatrix cmatrix
         ) {
             this.name = name;
             this.training = training;
@@ -247,6 +273,8 @@ public abstract class Classifier {
             this.testing = testing;
             this.testSize = testSize;
             this.windowLength = windowLength;
+            this.confusionMatrix = cmatrix;
+            this.outputString = outputString;
         }
 
         public double getTestingAccuracy() {
@@ -285,10 +313,29 @@ public abstract class Classifier {
     public static class Predictions {
         public Double[] labels;
         public AtomicInteger correct;
+        public ConfusionMatrix confusionMatrix;
+        public Double[] goldLabels;
 
         public Predictions(Double[] labels, int bestCorrect) {
             this.labels = labels;
             this.correct = new AtomicInteger(bestCorrect);
+        }
+        public Predictions(Double[] labels, int bestCorrect, Double[] goldLabels) {
+            this.labels = labels;
+            this.goldLabels = goldLabels;
+            this.correct = new AtomicInteger(bestCorrect);
+        }
+        public void buildConfusionMatrix(){
+            this.confusionMatrix = new ConfusionMatrix();
+            for(int i = 0; i < this.goldLabels.length; i++) {
+                this.confusionMatrix.increaseValue(String.valueOf(this.goldLabels[i]),String.valueOf(this.labels[i]));
+            }
+        }
+        public ConfusionMatrix getConfusionMatrix() {
+            if(confusionMatrix == null){
+                buildConfusionMatrix();
+            }
+            return confusionMatrix;
         }
     }
 
@@ -506,6 +553,53 @@ public abstract class Classifier {
         return predictedLabels;
     }
 
+    protected Double[] score(
+            final String name,
+            final MultiVariateTimeSeries[] samples,
+            final List<Pair<Double, Integer>>[] labels,
+            final List<Integer> currentWindowLengths) {
+
+        Double[] predictedLabels = new Double[samples.length];
+        //long[] maxCounts = new long[samples.length];
+
+        //int correctTesting = 0;
+        for (int i = 0; i < labels.length; i++) {
+            Map<Double, Long> counts = new HashMap<>();
+
+            for (Pair<Double, Integer> k : labels[i]) {
+                if (k != null && k.key != null) {
+                    Double label = k.key;
+                    Long count = counts.get(label);
+                    long increment = ENSEMBLE_WEIGHTS ? k.value : 1;
+                    count = (count == null) ? increment : count + increment;
+                    counts.put(label, count);
+                }
+            }
+
+            long maxCount = -1;
+            for (Entry<Double, Long> e : counts.entrySet()) {
+                if (predictedLabels[i] == null
+                        || maxCount < e.getValue()
+                        || maxCount == e.getValue()  // break ties
+                        && predictedLabels[i] <= e.getKey()
+                        ) {
+                    maxCount = e.getValue();
+                    // maxCounts[i] = maxCount;
+                    predictedLabels[i] = e.getKey();
+                }
+            }
+        }
+
+        //System.out.println(Arrays.toString(predictedLabels));
+        //System.out.println(Arrays.toString(maxCounts));
+
+        if (DEBUG) {
+            System.out.print(name + " Testing with " + currentWindowLengths.size() + " models:\t");
+            System.out.println(currentWindowLengths.toString() + "\n");
+        }
+
+        return predictedLabels;
+    }
 
     protected Integer[] getWindowsBetween(int minWindowLength, int maxWindowLength) {
         List<Integer> windows = new ArrayList<>();
@@ -539,6 +633,7 @@ public abstract class Classifier {
         }
         return labels;
     }
+
     protected static Set<Double> uniqueClassLabels(MultiVariateTimeSeries[] ts) {
         Set<Double> labels = new HashSet<>();
         for (MultiVariateTimeSeries t : ts) {
@@ -581,6 +676,55 @@ public abstract class Classifier {
             this.testIndices[s] = convertToInt(sets[s]);
             this.trainIndices[s] = convertToInt(sets, s);
         }
+    }
+
+    public static void generateIndicesStatic(MultiVariateTimeSeries[] samples, int splits, int[][] trainI, int[][] testI) {
+        IntArrayList[] sets = Classifier.getStratifiedTrainTestSplitIndicesStatic(samples, splits);
+        for (int s = 0; s < splits; s++) {
+            testI[s] = convertToInt(sets[s]);
+            trainI[s] = convertToInt(sets, s);
+        }
+    }
+
+    public static IntArrayList[] getStratifiedTrainTestSplitIndicesStatic(
+            MultiVariateTimeSeries[] samples,
+            int splits) {
+
+        HashMap<Double, IntArrayDeque> elements = new HashMap<>();
+
+        for (int i = 0; i < samples.length; i++) {
+            Double label = samples[i].getLabel();
+            IntArrayDeque sameLabel = elements.get(label);
+            if (sameLabel == null) {
+                sameLabel = new IntArrayDeque();
+                elements.put(label, sameLabel);
+            }
+            sameLabel.addLast(i);
+        }
+
+        // pick samples
+        IntArrayList[] sets = new IntArrayList[splits];
+        for (int i = 0; i < splits; i++) {
+            sets[i] = new IntArrayList();
+        }
+
+        // all but one
+        for (Entry<Double, IntArrayDeque> data : elements.entrySet()) {
+            IntArrayDeque d = data.getValue();
+            separate:
+            while (true) {
+                for (int s = 0; s < splits; s++) {
+                    if (!d.isEmpty()) {
+                        int dd = d.removeFirst();
+                        sets[s].add(dd);
+                    } else {
+                        break separate;
+                    }
+                }
+            }
+        }
+
+        return sets;
     }
 
     protected IntArrayList[] getStratifiedTrainTestSplitIndices(
