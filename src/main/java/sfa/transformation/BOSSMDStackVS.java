@@ -177,7 +177,7 @@ public class BOSSMDStackVS {
         }
 
         // count the number of classes where the word is present
-        IntShortHashMap wordInClassFreq = new IntShortHashMap(matrix.iterator().next().value.size());
+        IntIntHashMap wordInClassFreq = new IntIntHashMap(matrix.iterator().next().value.size());
 
         for (ObjectCursor<IntFloatHashMap> stat : matrix.values()) {
             // count the occurrence of words
@@ -191,7 +191,7 @@ public class BOSSMDStackVS {
             IntFloatHashMap tfIDFs = stat.value;
             // calculate the tfIDF value for each word
             for (IntFloatCursor patternFrequency : tfIDFs) {
-                short wordCount = wordInClassFreq.get(patternFrequency.key);
+                int wordCount = wordInClassFreq.get(patternFrequency.key);
                 if (patternFrequency.value > 0
                         && uniqueLabels.size() != wordCount // avoid Math.log(1)
                         ) {
@@ -217,10 +217,11 @@ public class BOSSMDStackVS {
             final ObjectObjectHashMap<Double, IntFloatHashMap> matrix,
             final Set<Double> uniqueLabels,
             final BagOfPattern[] bag) {
+        int maxElements = (int) (dict.size() * 0.75 + 1);
         for (Double label : uniqueLabels) {
             IntFloatHashMap stat = matrix.get(label);
             if (stat == null) {
-                matrix.put(label, new IntFloatHashMap(bag[0].bag.size() * bag.length));
+                matrix.put(label, new IntFloatHashMap(maxElements));
             } else {
                 stat.clear();
             }

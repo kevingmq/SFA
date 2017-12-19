@@ -20,8 +20,8 @@ public class BOSSMDStackClassifier extends Classifier{
     // default training parameters
     public static double factor = 0.90;
 
-    public static int maxF = 12;
-    public static int minF = 2;
+    public static int maxF = 10;
+    public static int minF = 4;
     public static int maxS = 4;
 
     public static boolean normMagnitudes = false;

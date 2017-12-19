@@ -1,4 +1,4 @@
-package sfa.SubjectDependent;
+package sfa.SubjectIndependent;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -14,19 +14,18 @@ import java.io.File;
 import java.io.IOException;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
-import java.util.ArrayList;
 import java.util.Locale;
 
 @RunWith(JUnit4.class)
-public class MainSubjectDependent {
+public class MainSubjectIndependent {
 
     // The multivariate datasets to use
     public static String[] datasets = new String[]{
-            "WISDM-MDU",
+            "WISDM-MDI",
     };
 
     @Test
-    public void testSubjectDependentClassification() throws IOException {
+    public void testSubjectIndependentClassification() throws IOException {
         try {
             // the relative path to the datasets
 
@@ -39,49 +38,48 @@ public class MainSubjectDependent {
                 File d = new File(dir.getAbsolutePath() + "/" + s);
                 System.out.println("dataset,userId,numSources,samples,accuracy,precision,recall,f-measure");
                 if (d.exists() && d.isDirectory()) {
+                    double somaAccuracy = 0;
+                    double somaPrecision = 0;
+                    double somaRecall = 0;
+                    double somafmeasure = 0;
+
+                    int num_sources = 3;
+                    int segment_length = 200;
+                    Classifier.DEBUG = DEBUG;
+                    TimeSeriesLoader.DEBUG = DEBUG;
+                    int countUsers = 0;
+                    for (File userFile : d.listFiles()) {
+                        if (userFile.exists() && userFile.isDirectory()) {
+
+                            File trainFile = new File(dir.getAbsolutePath() + "/" + s + "/" + userFile.getName() + "/TRAIN");
+                            File testFile = new File(dir.getAbsolutePath() + "/" + s + "/" + userFile.getName() + "/TEST");
 
 
-                    for (File train : d.listFiles()) {
 
-                        int num_sources = 3;
-                        int segment_length = 200;
-                        String filename = train.getName();
-                        Classifier.DEBUG = DEBUG;
-                        TimeSeriesLoader.DEBUG = DEBUG;
-                        MultiVariateTimeSeries[] allSamples = TimeSeriesLoader.loadMultivariateDataset(train, num_sources, segment_length);
+                            MultiVariateTimeSeries[] trainSamples = TimeSeriesLoader.loadMultivariateDataset(trainFile, num_sources, segment_length);
+                            MultiVariateTimeSeries[] testSamples = TimeSeriesLoader.loadMultivariateDataset(testFile, num_sources, segment_length);
 
-                        int folds = 10;
-                        int[][] testIndices = new int[folds][];
-                        int[][] trainIndices = new int[folds][];
 
-                        Classifier.generateIndicesStatic(allSamples, folds,trainIndices,testIndices);
-
-                        double somaAccuracy = 0;
-                        double somaPrecision = 0;
-                        double somaRecall= 0;
-                        double somafmeasure = 0;
-
-                        for (int f = 0; f < folds; f++){
-
-                            MultiVariateTimeSeries[] trainSamples = getSamplesUsingIndes(allSamples,trainIndices[f]);
-                            MultiVariateTimeSeries[] testSamples = getSamplesUsingIndes(allSamples,testIndices[f]);
                             BOSSMDStackClassifier stack = new BOSSMDStackClassifier();
-                            Classifier.Score result = stack.eval(trainSamples,testSamples);
+                            Classifier.Score result = stack.eval(trainSamples, testSamples);
 
                             somaAccuracy += result.confusionMatrix.getAccuracy();
                             somaPrecision += result.confusionMatrix.getAvgPrecision();
                             somaRecall += result.confusionMatrix.getAvgRecall();
                             somafmeasure += result.confusionMatrix.getMacroFMeasure();
-                            if(DEBUG) {
+                            countUsers++;
+                            if (DEBUG) {
                                 System.out.println(result.outputString);
                             }
 
                         }
-                        DecimalFormatSymbols otherSymbols = new DecimalFormatSymbols(Locale.getDefault());
-                        otherSymbols.setDecimalSeparator('.');
-                        DecimalFormat df = new DecimalFormat("#.00",otherSymbols);
-                        System.out.println(s + "," + filename + "," + num_sources + "," + allSamples.length + "," + df.format(somaAccuracy/ folds * 100) + "," + df.format(somaPrecision/ folds * 100) + "," + df.format(somaRecall/ folds * 100) + "," + df.format(somafmeasure/ folds * 100));
+
+
                     }
+                    DecimalFormatSymbols otherSymbols = new DecimalFormatSymbols(Locale.getDefault());
+                    otherSymbols.setDecimalSeparator('.');
+                    DecimalFormat df = new DecimalFormat("#.00", otherSymbols);
+                    System.out.println(s + "," + d.getName() + "," + num_sources + "," +  df.format(somaAccuracy / countUsers *100 ) + "," + df.format(somaPrecision / countUsers *100) + "," + df.format(somaRecall / countUsers *100) + "," + df.format(somafmeasure / countUsers *100));
                 }
 
             }
