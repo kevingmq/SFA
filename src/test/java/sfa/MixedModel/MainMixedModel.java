@@ -21,7 +21,8 @@ public class MainMixedModel {
 
     // The multivariate datasets to use
     public static String[] datasets = new String[]{
-            "WISDM-6C-MIXED",
+            //"WISDM-6C-MIXED",
+            "UCI-MIXED",
     };
 
     @Test

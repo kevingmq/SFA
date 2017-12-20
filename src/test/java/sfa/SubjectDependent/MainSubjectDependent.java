@@ -22,7 +22,8 @@ public class MainSubjectDependent {
 
     // The multivariate datasets to use
     public static String[] datasets = new String[]{
-            "WISDM-MDU",
+            //"WISDM-MDU",
+            "UCI-MDU",
     };
 
     @Test
