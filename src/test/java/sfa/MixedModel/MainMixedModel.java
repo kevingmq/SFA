@@ -22,7 +22,8 @@ public class MainMixedModel {
     // The multivariate datasets to use
     public static String[] datasets = new String[]{
             //"WISDM-6C-MIXED",
-            "UCI-MIXED",
+            //"UCI-MIXED",
+            "UniMiB-MIXED"
     };
 
     @Test
@@ -42,7 +43,7 @@ public class MainMixedModel {
 
 
                     int num_sources = 3;
-                    int segment_length = 200;
+                    int segment_length = 151;
                     Classifier.DEBUG = DEBUG;
                     TimeSeriesLoader.DEBUG = DEBUG;
 

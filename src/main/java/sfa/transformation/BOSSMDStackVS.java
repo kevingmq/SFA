@@ -1,6 +1,8 @@
 package sfa.transformation;
 
-import com.carrotsearch.hppc.*;
+import com.carrotsearch.hppc.IntFloatHashMap;
+import com.carrotsearch.hppc.IntIntHashMap;
+import com.carrotsearch.hppc.ObjectObjectHashMap;
 import com.carrotsearch.hppc.cursors.*;
 import sfa.classification.Classifier;
 import sfa.classification.ParallelFor;
@@ -217,7 +219,7 @@ public class BOSSMDStackVS {
             final ObjectObjectHashMap<Double, IntFloatHashMap> matrix,
             final Set<Double> uniqueLabels,
             final BagOfPattern[] bag) {
-        int maxElements = (int) (dict.size() * 0.75 + 1);
+        int maxElements = (int) (this.dict.size() * 1.75);
         for (Double label : uniqueLabels) {
             IntFloatHashMap stat = matrix.get(label);
             if (stat == null) {

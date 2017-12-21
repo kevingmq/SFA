@@ -23,7 +23,8 @@ public class MainSubjectDependent {
     // The multivariate datasets to use
     public static String[] datasets = new String[]{
             //"WISDM-MDU",
-            "UCI-MDU",
+            //"UCI-MDU",
+            "UniMiB-MDU",
     };
 
     @Test
@@ -45,7 +46,7 @@ public class MainSubjectDependent {
                     for (File train : d.listFiles()) {
 
                         int num_sources = 3;
-                        int segment_length = 200;
+                        int segment_length = 151;
                         String filename = train.getName();
                         Classifier.DEBUG = DEBUG;
                         TimeSeriesLoader.DEBUG = DEBUG;
