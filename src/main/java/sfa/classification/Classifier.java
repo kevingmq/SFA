@@ -35,7 +35,7 @@ public abstract class Classifier {
     public static boolean DEBUG = false;
     public static boolean ENSEMBLE_WEIGHTS = true;
 
-    public static int threads = 1;
+    public static int threads = 8;
 
     protected int[][] testIndices;
     protected int[][] trainIndices;
@@ -44,7 +44,7 @@ public abstract class Classifier {
     public static int MAX_WINDOW_LENGTH = 250;
 
     // Blocks for parallel execution
-    public final static int BLOCKS = 8;
+    public final static int BLOCKS = 24;
 
     static {
         Runtime runtime = Runtime.getRuntime();
@@ -63,6 +63,11 @@ public abstract class Classifier {
      * Invokes {@code shutdown} when this executor is no longer
      * referenced and it has no threads.
      */
+    public void shutdown(){
+        if(!exec.isShutdown()){
+            exec.shutdown();
+        }
+    }
     protected void finalize() {
         if (exec != null) {
             exec.shutdown();

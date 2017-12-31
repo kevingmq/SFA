@@ -132,12 +132,22 @@ public class BOSSMDStackVS {
             for (int idSource = 0; idSource < dimensionality; idSource++) {
 
                 // create subsequences
-                String dLabel = String.valueOf(idSource);
+                StringBuilder dLabel = new StringBuilder();
+                dLabel.append(String.valueOf(idSource));
+                dLabel.append('_');
+                //String dLabel = String.valueOf(idSource);
+                int lastInt = Integer.MIN_VALUE;
 
                 for (int offset = 0; offset < words[index][idSource].length; offset++) {
-                    String word = dLabel + "_" +((words[index][idSource][offset] & mask));
-                    int dict = this.dict.getWord(word);
-                    bop.bag.putOrAdd(dict,1,1);
+
+                    dLabel.append(String.valueOf(words[index][idSource][offset] & mask));
+
+                    int dict = this.dict.getWord(dLabel.toString());
+                    if(dict != lastInt){
+                        bop.bag.putOrAdd(dict,1,1);
+                        lastInt = dict;
+                    }
+                    dLabel.setLength(2);
                 }
             }
             bagOfPatterns.add(bop);

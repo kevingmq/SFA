@@ -7,6 +7,16 @@
  */
 
 // Apply the java plugin to add support for Java
+buildscript {
+    repositories {
+        jcenter()
+    }
+    dependencies {
+        classpath 'com.github.jengelman.gradle.plugins:shadow:2.0.2'
+    }
+}
+
+apply plugin: 'com.github.johnrengelman.shadow'
 apply plugin: 'java'
 
 // apply plugin: 'checkstyle'
@@ -63,5 +73,5 @@ test {
 }
 
 // Define the main class for the application
-mainClassName = 'src/sfa/test/UCRClassification'
+mainClassName = 'sfa.main.Main'
 
