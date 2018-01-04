@@ -10,31 +10,46 @@ import java.io.File;
 import java.io.IOException;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
-import java.util.ArrayList;
 import java.util.Locale;
 
 public class Main {
 
     public static void main (String[] args){
-        String[] datasets = new String[]{
-                //"WISDM-MDI",
-                //"UCI-MDI",
+        String[] p_datasets_subjectIndependent = new String[]{
+                "WISDM-MDI",
+                "UCI-MDI-OVER",
                 "UniMiB-MDI",
         };
-        /*ArrayList<String> list = new ArrayList<>();
-        for(int i = 0; i < args.length; i++){
-            list.add(args[i]);
-        }*/
+        String[] p_segmentLenght = new String[]{
+                "200",
+                "128",
+                "151",
+        };
+        String[] p_datasets_subjectDependent = new String[]{
+                "WISDM-MDU",
+                "UCI-MDU-OVER",
+                "UniMiB-MDU",
+        };
+
+        int n_source = Integer.valueOf(args[1]);
+
         try {
-            testSubjectIndependentClassification(datasets);
-            //testSubjectDependentClassification(list.toArray(new String[]{}));
+            switch (Integer.valueOf(args[0])) {
+                case 0:
+                    testSubjectIndependentClassification(p_datasets_subjectIndependent, p_segmentLenght, n_source);
+                case 1:
+                    testSubjectDependentClassification(p_datasets_subjectDependent, p_segmentLenght, n_source);
+                case 2:
+
+                default:
+            }
         } catch (IOException e) {
             e.printStackTrace();
         }
         ParallelFor.shutdown();
     }
 
-    public static void testSubjectIndependentClassification(String[] datasets) throws IOException {
+    public static void testSubjectIndependentClassification(String[] datasets_subjectIndependent, String[] segmentLenght, int n_source) throws IOException {
         try {
             // the relative path to the datasets
 
@@ -43,8 +58,8 @@ public class Main {
 
             File dir = new File(home);
 
-            for (String s : datasets) {
-                File d = new File(dir.getAbsolutePath() + "/" + s);
+            for(int parm = 0; parm < datasets_subjectIndependent.length; parm++) {
+                File d = new File(dir.getAbsolutePath() + "/" + datasets_subjectIndependent[parm]);
                 System.out.println("dataset,userId,numSources,samples,accuracy,precision,recall,f-measure");
                 if (d.exists() && d.isDirectory()) {
                     double somaAccuracy = 0;
@@ -52,16 +67,16 @@ public class Main {
                     double somaRecall = 0;
                     double somafmeasure = 0;
 
-                    int num_sources = 3;
-                    int segment_length = 151;
+                    int num_sources = n_source;
+                    int segment_length = Integer.valueOf(segmentLenght[parm]);
                     Classifier.DEBUG = DEBUG;
                     TimeSeriesLoader.DEBUG = DEBUG;
                     int countUsers = 0;
                     for (File userFile : d.listFiles()) {
                         if (userFile.exists() && userFile.isDirectory()) {
 
-                            File trainFile = new File(dir.getAbsolutePath() + "/" + s + "/" + userFile.getName() + "/TRAIN");
-                            File testFile = new File(dir.getAbsolutePath() + "/" + s + "/" + userFile.getName() + "/TEST");
+                            File trainFile = new File(dir.getAbsolutePath() + "/" + datasets_subjectIndependent[parm] + "/" + userFile.getName() + "/TRAIN");
+                            File testFile = new File(dir.getAbsolutePath() + "/" + datasets_subjectIndependent[parm] + "/" + userFile.getName() + "/TEST");
 
 
 
@@ -83,7 +98,7 @@ public class Main {
                             System.out.print(String.valueOf(result.confusionMatrix.getAvgRecall()) + ",");
                             System.out.print(String.valueOf(result.confusionMatrix.getMacroFMeasure()) + ",");
                             System.out.print(String.valueOf(result.confusionMatrix.getConfidence95Accuracy()) + ",");
-                            System.out.print(String.valueOf(result.confusionMatrix.getConfidence95MacroFM()) + ",");
+                            System.out.print(String.valueOf(result.confusionMatrix.getConfidence95MacroFM()));
                             System.out.println();
                             if (DEBUG) {
                                 System.out.println(result.outputString);
@@ -96,7 +111,7 @@ public class Main {
                     DecimalFormatSymbols otherSymbols = new DecimalFormatSymbols(Locale.getDefault());
                     otherSymbols.setDecimalSeparator('.');
                     DecimalFormat df = new DecimalFormat("#.00", otherSymbols);
-                    System.out.println(s + "," + d.getName() + "," + num_sources + "," +  df.format(somaAccuracy / countUsers *100 ) + "," + df.format(somaPrecision / countUsers *100) + "," + df.format(somaRecall / countUsers *100) + "," + df.format(somafmeasure / countUsers *100));
+                    System.out.println(datasets_subjectIndependent[parm] + "," + d.getName() + "," + num_sources + "," +  df.format(somaAccuracy / countUsers *100 ) + "," + df.format(somaPrecision / countUsers *100) + "," + df.format(somaRecall / countUsers *100) + "," + df.format(somafmeasure / countUsers *100));
                 }
 
             }
@@ -105,7 +120,7 @@ public class Main {
         }
     }
 
-    public static void testSubjectDependentClassification(String[] datasets) throws IOException {
+    public static void testSubjectDependentClassification(String[] datasets_subjectDependent, String[] lenghts, int n_source) throws IOException {
         try {
             // the relative path to the datasets
 
@@ -114,16 +129,16 @@ public class Main {
 
             File dir = new File(home);
 
-            for (String s : datasets) {
-                File d = new File(dir.getAbsolutePath() + "/" + s);
+            for(int parm_index = 0; parm_index < datasets_subjectDependent.length; parm_index++) {
+                File d = new File(dir.getAbsolutePath() + "/" + datasets_subjectDependent[parm_index]);
                 System.out.println("dataset,userId,numSources,samples,accuracy,precision,recall,f-measure");
                 if (d.exists() && d.isDirectory()) {
 
                     //each USER
                     for (File train : d.listFiles()) {
 
-                        int num_sources = 3;
-                        int segment_length = 151;
+                        int num_sources = n_source;
+                        int segment_length = Integer.valueOf(lenghts[parm_index]);
                         String filename = train.getName();
                         Classifier.DEBUG = DEBUG;
                         TimeSeriesLoader.DEBUG = DEBUG;
@@ -142,8 +157,8 @@ public class Main {
 
                         for (int f = 0; f < folds; f++){
 
-                            MultiVariateTimeSeries[] trainSamples = getSamplesUsingIndes(allSamples,trainIndices[f]);
-                            MultiVariateTimeSeries[] testSamples = getSamplesUsingIndes(allSamples,testIndices[f]);
+                            MultiVariateTimeSeries[] trainSamples = getSamplesUsingIndex(allSamples,trainIndices[f]);
+                            MultiVariateTimeSeries[] testSamples = getSamplesUsingIndex(allSamples,testIndices[f]);
                             BOSSMDStackClassifier stack = new BOSSMDStackClassifier();
                             Classifier.Score result = stack.eval(trainSamples,testSamples);
 
@@ -151,18 +166,21 @@ public class Main {
                             somaPrecision += result.confusionMatrix.getAvgPrecision();
                             somaRecall += result.confusionMatrix.getAvgRecall();
                             somafmeasure += result.confusionMatrix.getMacroFMeasure();
-                            if(DEBUG) {
-                                System.out.println("Accuracy:" + result.confusionMatrix.getAccuracy());
-                                System.out.println("AvgPrecision:" + result.confusionMatrix.getAvgPrecision());
-                                System.out.println("AvgRecall:" + result.confusionMatrix.getAvgRecall());
-                                System.out.println("MacroFmeasure:" + result.confusionMatrix.getMacroFMeasure());
-                            }
+                            System.out.print(train.getName() + ',');
+                            System.out.print(String.valueOf(result.confusionMatrix.getAccuracy()) + ",");
+                            System.out.print(String.valueOf(result.confusionMatrix.getAvgPrecision()) + ",");
+                            System.out.print(String.valueOf(result.confusionMatrix.getAvgRecall()) + ",");
+                            System.out.print(String.valueOf(result.confusionMatrix.getMacroFMeasure()) + ",");
+                            System.out.print(String.valueOf(result.confusionMatrix.getConfidence95Accuracy()) + ",");
+                            System.out.print(String.valueOf(result.confusionMatrix.getConfidence95MacroFM()));
+                            System.out.println();
+                            stack.shutdown();
 
                         }
                         DecimalFormatSymbols otherSymbols = new DecimalFormatSymbols(Locale.getDefault());
                         otherSymbols.setDecimalSeparator('.');
                         DecimalFormat df = new DecimalFormat("#.00",otherSymbols);
-                        System.out.println(s + "," + filename + "," + num_sources + "," + allSamples.length + "," + df.format(somaAccuracy/ folds * 100) + "," + df.format(somaPrecision/ folds * 100) + "," + df.format(somaRecall/ folds * 100) + "," + df.format(somafmeasure/ folds * 100));
+                        System.out.println(datasets_subjectDependent[parm_index] + "," + filename + "," + num_sources + "," + allSamples.length + "," + df.format(somaAccuracy/ folds * 100) + "," + df.format(somaPrecision/ folds * 100) + "," + df.format(somaRecall/ folds * 100) + "," + df.format(somafmeasure/ folds * 100));
                     }
                 }
 
@@ -172,7 +190,7 @@ public class Main {
         }
     }
 
-    private static MultiVariateTimeSeries[] getSamplesUsingIndes(MultiVariateTimeSeries[] allSamples, int[] indices) {
+    private static MultiVariateTimeSeries[] getSamplesUsingIndex(MultiVariateTimeSeries[] allSamples, int[] indices) {
         MultiVariateTimeSeries[] result = new MultiVariateTimeSeries[indices.length];
         int count = 0;
         for (int i : indices) {
