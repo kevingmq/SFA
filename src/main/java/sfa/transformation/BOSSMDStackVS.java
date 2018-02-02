@@ -2,13 +2,13 @@ package sfa.transformation;
 
 import com.carrotsearch.hppc.IntFloatHashMap;
 import com.carrotsearch.hppc.IntIntHashMap;
+import com.carrotsearch.hppc.ObjectIntHashMap;
 import com.carrotsearch.hppc.ObjectObjectHashMap;
 import com.carrotsearch.hppc.cursors.*;
 import sfa.classification.Classifier;
 import sfa.classification.ParallelFor;
 import sfa.timeseries.MultiVariateTimeSeries;
 import sfa.timeseries.TimeSeries;
-import sfa.transformation.MUSE.Dictionary;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -57,7 +57,7 @@ public class BOSSMDStackVS {
         }
     }
 
-    public static TimeSeries[][] splitMultiDimTimeSeries(int numSources,final MultiVariateTimeSeries[] samples) {
+    public static TimeSeries[][] splitMultiDimTimeSeries(int numSources, final MultiVariateTimeSeries[] samples) {
 
         TimeSeries[][] samplesModificado = new TimeSeries[numSources][samples.length];
         for (int indexOfSource = 0; indexOfSource < numSources; indexOfSource++) {
@@ -122,32 +122,29 @@ public class BOSSMDStackVS {
 
         final byte usedBits = (byte) Classifier.Words.binlog(this.alphabetSize);
 
-        //    final long mask = (usedBits << wordLength) - 1l;
-        final long mask = (1L << (usedBits * wordLength)) - 1L;
+
+        final int mask = (1 << (usedBits * wordLength)) - 1;
 
         // iterate all samples
-        for(int index = 0; index < samples.length; index++){
+        for (int index = 0; index < samples.length; index++) {
 
             BagOfPattern bop = new BagOfPattern(100, samples[index].getLabel());
             for (int idSource = 0; idSource < dimensionality; idSource++) {
 
                 // create subsequences
-                StringBuilder dLabel = new StringBuilder();
-                dLabel.append(String.valueOf(idSource));
-                dLabel.append('_');
-                //String dLabel = String.valueOf(idSource);
+
                 int lastInt = Integer.MIN_VALUE;
 
                 for (int offset = 0; offset < words[index][idSource].length; offset++) {
 
-                    dLabel.append(String.valueOf(words[index][idSource][offset] & mask));
 
-                    int dict = this.dict.getWord(dLabel.toString());
-                    if(dict != lastInt){
-                        bop.bag.putOrAdd(dict,1,1);
+                    MDWord word = new MDWord(idSource, words[index][idSource][offset] & mask);
+                    int dict = this.dict.getWord(word);
+                    if (dict != lastInt) {
+                        bop.bag.putOrAdd(dict, 1, 1);
                         lastInt = dict;
                     }
-                    dLabel.setLength(2);
+
                 }
             }
             bagOfPatterns.add(bop);
@@ -254,5 +251,66 @@ public class BOSSMDStackVS {
                 }
             }
         }
+    }
+
+    class MDWord {
+        int dim = 0;
+        int word = 0;
+
+        public MDWord(int dim, int word) {
+            this.dim = dim;
+            this.word = word;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            MDWord museWord = (MDWord) o;
+            return dim == museWord.dim &&
+                    word == museWord.word;
+        }
+
+        @Override
+        public int hashCode() {
+            int result = 1;
+            result = 31 * result + Integer.hashCode(word);
+            result = 31 * result + Integer.hashCode(dim);
+            return result;
+        }
+    }
+
+    public static class Dictionary {
+        ObjectIntHashMap<MDWord> dict;
+
+
+        public Dictionary() {
+            this.dict = new ObjectIntHashMap<MDWord>();
+
+        }
+
+        public void reset() {
+            this.dict = new ObjectIntHashMap<MDWord>();
+
+        }
+
+        public int getWord(MDWord word) {
+            int index = 0;
+            int newWord = -1;
+            if ((index = this.dict.indexOf(word)) > -1) {
+                newWord = this.dict.indexGet(index);
+            } else {
+                newWord = this.dict.size() + 1;
+                this.dict.put(word, newWord);
+            }
+            return newWord;
+        }
+
+
+        public int size() {
+
+            return this.dict.size();
+
+        }
+
     }
 }
