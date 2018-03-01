@@ -3,6 +3,7 @@ package sfa.main;
 import sfa.classification.BOSSMDStackClassifier;
 import sfa.classification.Classifier;
 import sfa.classification.ParallelFor;
+import sfa.metrics.ConfusionMatrix;
 import sfa.timeseries.MultiVariateTimeSeries;
 import sfa.timeseries.TimeSeriesLoader;
 
@@ -16,7 +17,7 @@ public class Main {
 
     public static void main (String[] args){
         String[] p_datasets_subjectIndependent = new String[]{
-                "WISDM-MDI",
+                "WISDM-MDI-X",
                 "UCI-MDI-OVER",
                 "UniMiB-MDI",
         };
@@ -26,7 +27,7 @@ public class Main {
                 "151",
         };
         String[] p_datasets_subjectDependent = new String[]{
-                "WISDM-MDU",
+                "WISDM-MDU-6C",
                 "UCI-MDU-OVER",
                 "UniMiB-MDU",
         };
@@ -60,7 +61,7 @@ public class Main {
 
             for(int parm = 0; parm < datasets_subjectIndependent.length; parm++) {
                 File d = new File(dir.getAbsolutePath() + "/" + datasets_subjectIndependent[parm]);
-                System.out.println("dataset,userId,numSources,samples,accuracy,precision,recall,f-measure");
+                System.out.println("==========================");
                 if (d.exists() && d.isDirectory()) {
                     double somaAccuracy = 0;
                     double somaPrecision = 0;
@@ -72,6 +73,7 @@ public class Main {
                     Classifier.DEBUG = DEBUG;
                     TimeSeriesLoader.DEBUG = DEBUG;
                     int countUsers = 0;
+                    ConfusionMatrix cmGeral = new ConfusionMatrix();
                     for (File userFile : d.listFiles()) {
                         if (userFile.exists() && userFile.isDirectory()) {
 
@@ -86,32 +88,36 @@ public class Main {
 
                             BOSSMDStackClassifier stack = new BOSSMDStackClassifier();
                             Classifier.Score result = stack.eval(trainSamples, testSamples);
+                            System.out.println(result.outputString);
+                            cmGeral = ConfusionMatrix.createCumulativeMatrix(cmGeral,result.confusionMatrix);
 
-                            somaAccuracy += result.confusionMatrix.getAccuracy();
-                            somaPrecision += result.confusionMatrix.getAvgPrecision();
-                            somaRecall += result.confusionMatrix.getAvgRecall();
-                            somafmeasure += result.confusionMatrix.getMacroFMeasure();
-                            countUsers++;
-                            System.out.print(userFile.getName() + ',');
-                            System.out.print(String.valueOf(result.confusionMatrix.getAccuracy()) + ",");
-                            System.out.print(String.valueOf(result.confusionMatrix.getAvgPrecision()) + ",");
-                            System.out.print(String.valueOf(result.confusionMatrix.getAvgRecall()) + ",");
-                            System.out.print(String.valueOf(result.confusionMatrix.getMacroFMeasure()) + ",");
-                            System.out.print(String.valueOf(result.confusionMatrix.getConfidence95Accuracy()) + ",");
-                            System.out.print(String.valueOf(result.confusionMatrix.getConfidence95MacroFM()));
-                            System.out.println();
-                            if (DEBUG) {
-                                System.out.println(result.outputString);
-                            }
                             stack.shutdown();
                         }
 
 
                     }
-                    DecimalFormatSymbols otherSymbols = new DecimalFormatSymbols(Locale.getDefault());
-                    otherSymbols.setDecimalSeparator('.');
-                    DecimalFormat df = new DecimalFormat("#.00", otherSymbols);
-                    System.out.println(datasets_subjectIndependent[parm] + "," + d.getName() + "," + num_sources + "," +  df.format(somaAccuracy / countUsers *100 ) + "," + df.format(somaPrecision / countUsers *100) + "," + df.format(somaRecall / countUsers *100) + "," + df.format(somafmeasure / countUsers *100));
+                    System.out.println("==========================");
+                    System.out.println("dataset,Accuracy,Precision,Recall,Fscore,95Accuracy,95Fscore,Kappa");
+                    System.out.print(datasets_subjectIndependent[parm] + ',');
+                    System.out.print(String.valueOf(cmGeral.getAccuracy()) + ",");
+                    System.out.print(String.valueOf(cmGeral.getAvgPrecision()) + ",");
+                    System.out.print(String.valueOf(cmGeral.getAvgRecall()) + ",");
+                    System.out.print(String.valueOf(cmGeral.getMacroFMeasure()) + ",");
+                    System.out.print(String.valueOf(cmGeral.getConfidence95Accuracy()) + ",");
+                    System.out.print(String.valueOf(cmGeral.getConfidence95MacroFM()) + ",");
+                    System.out.println(String.valueOf(cmGeral.getCohensKappa()));
+                    System.out.println("==========================");
+                    System.out.println(cmGeral.printClassDistributionGold());
+                    System.out.println("==========================");
+                    System.out.println(cmGeral.toStringLatex());
+                    System.out.println("==========================");
+                    System.out.println(cmGeral.toString());
+                    System.out.println("==========================");
+                    System.out.println(cmGeral.toStringProbabilistic());
+                    System.out.println("==========================");
+                    System.out.println(" ");
+                    cmGeral.toExportToFile(System.getProperty("user.home") + "/logs/confusionmatrix/leave-subject-out/" ,datasets_subjectIndependent[parm]);
+
                 }
 
             }
@@ -131,10 +137,13 @@ public class Main {
 
             for(int parm_index = 0; parm_index < datasets_subjectDependent.length; parm_index++) {
                 File d = new File(dir.getAbsolutePath() + "/" + datasets_subjectDependent[parm_index]);
-                System.out.println("dataset,userId,numSources,samples,accuracy,precision,recall,f-measure");
+                System.out.println("==========================");
+
+
                 if (d.exists() && d.isDirectory()) {
 
                     //each USER
+                    ConfusionMatrix cmGeral = new ConfusionMatrix();
                     for (File train : d.listFiles()) {
 
                         int num_sources = n_source;
@@ -161,27 +170,36 @@ public class Main {
                             MultiVariateTimeSeries[] testSamples = getSamplesUsingIndex(allSamples,testIndices[f]);
                             BOSSMDStackClassifier stack = new BOSSMDStackClassifier();
                             Classifier.Score result = stack.eval(trainSamples,testSamples);
+                            System.out.println(result.outputString);
+                            cmGeral = ConfusionMatrix.createCumulativeMatrix(cmGeral,result.confusionMatrix);
 
-                            somaAccuracy += result.confusionMatrix.getAccuracy();
-                            somaPrecision += result.confusionMatrix.getAvgPrecision();
-                            somaRecall += result.confusionMatrix.getAvgRecall();
-                            somafmeasure += result.confusionMatrix.getMacroFMeasure();
-                            System.out.print(train.getName() + ',');
-                            System.out.print(String.valueOf(result.confusionMatrix.getAccuracy()) + ",");
-                            System.out.print(String.valueOf(result.confusionMatrix.getAvgPrecision()) + ",");
-                            System.out.print(String.valueOf(result.confusionMatrix.getAvgRecall()) + ",");
-                            System.out.print(String.valueOf(result.confusionMatrix.getMacroFMeasure()) + ",");
-                            System.out.print(String.valueOf(result.confusionMatrix.getConfidence95Accuracy()) + ",");
-                            System.out.print(String.valueOf(result.confusionMatrix.getConfidence95MacroFM()));
-                            System.out.println();
                             stack.shutdown();
 
                         }
-                        DecimalFormatSymbols otherSymbols = new DecimalFormatSymbols(Locale.getDefault());
-                        otherSymbols.setDecimalSeparator('.');
-                        DecimalFormat df = new DecimalFormat("#.00",otherSymbols);
-                        System.out.println(datasets_subjectDependent[parm_index] + "," + filename + "," + num_sources + "," + allSamples.length + "," + df.format(somaAccuracy/ folds * 100) + "," + df.format(somaPrecision/ folds * 100) + "," + df.format(somaRecall/ folds * 100) + "," + df.format(somafmeasure/ folds * 100));
+
+
                     }
+                    System.out.println("==========================");
+                    System.out.println("dataset,Accuracy,Precision,Recall,Fscore,95Accuracy,95Fscore,Kappa");
+                    System.out.print(datasets_subjectDependent[parm_index] + ',');
+                    System.out.print(String.valueOf(cmGeral.getAccuracy()) + ",");
+                    System.out.print(String.valueOf(cmGeral.getAvgPrecision()) + ",");
+                    System.out.print(String.valueOf(cmGeral.getAvgRecall()) + ",");
+                    System.out.print(String.valueOf(cmGeral.getMacroFMeasure()) + ",");
+                    System.out.print(String.valueOf(cmGeral.getConfidence95Accuracy()) + ",");
+                    System.out.print(String.valueOf(cmGeral.getConfidence95MacroFM()) + ",");
+                    System.out.println(String.valueOf(cmGeral.getCohensKappa()));
+                    System.out.println("==========================");
+                    System.out.println(cmGeral.printClassDistributionGold());
+                    System.out.println("==========================");
+                    System.out.println(cmGeral.toStringLatex());
+                    System.out.println("==========================");
+                    System.out.println(cmGeral.toString());
+                    System.out.println("==========================");
+                    System.out.println(cmGeral.toStringProbabilistic());
+                    System.out.println("==========================");
+                    System.out.println(" ");
+                    cmGeral.toExportToFile(System.getProperty("user.home") + "/logs/confusionmatrix/cross-validation-subject/" ,datasets_subjectDependent[parm_index]  );
                 }
 
             }

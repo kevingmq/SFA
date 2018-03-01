@@ -7,6 +7,7 @@ import sfa.SFAWordsTest;
 import sfa.classification.BOSSMDStackClassifier;
 import sfa.classification.Classifier;
 import sfa.classification.ParallelFor;
+import sfa.metrics.ConfusionMatrix;
 import sfa.timeseries.MultiVariateTimeSeries;
 import sfa.timeseries.TimeSeriesLoader;
 
@@ -50,6 +51,9 @@ public class MainSubjectIndependent {
                     Classifier.DEBUG = DEBUG;
                     TimeSeriesLoader.DEBUG = DEBUG;
                     int countUsers = 0;
+
+                    ConfusionMatrix cmGeral = new ConfusionMatrix();
+
                     for (File userFile : d.listFiles()) {
                         if (userFile.exists() && userFile.isDirectory()) {
 
@@ -64,12 +68,13 @@ public class MainSubjectIndependent {
 
                             BOSSMDStackClassifier stack = new BOSSMDStackClassifier();
                             Classifier.Score result = stack.eval(trainSamples, testSamples);
-
-                            somaAccuracy += result.confusionMatrix.getAccuracy();
-                            somaPrecision += result.confusionMatrix.getAvgPrecision();
-                            somaRecall += result.confusionMatrix.getAvgRecall();
-                            somafmeasure += result.confusionMatrix.getMacroFMeasure();
-                            countUsers++;
+                            ConfusionMatrix atual = ConfusionMatrix.createCumulativeMatrix(cmGeral,result.confusionMatrix);
+                            cmGeral = atual;
+                            //somaAccuracy += result.confusionMatrix.getAccuracy();
+                            //somaPrecision += result.confusionMatrix.getAvgPrecision();
+                            //somaRecall += result.confusionMatrix.getAvgRecall();
+                            //somafmeasure += result.confusionMatrix.getMacroFMeasure();
+                            //countUsers++;
                             if (DEBUG) {
                                 System.out.println(result.outputString);
                             }
@@ -82,6 +87,16 @@ public class MainSubjectIndependent {
                     otherSymbols.setDecimalSeparator('.');
                     DecimalFormat df = new DecimalFormat("#.00", otherSymbols);
                     System.out.println(s + "," + d.getName() + "," + num_sources + "," +  df.format(somaAccuracy / countUsers *100 ) + "," + df.format(somaPrecision / countUsers *100) + "," + df.format(somaRecall / countUsers *100) + "," + df.format(somafmeasure / countUsers *100));
+                    System.out.print(String.valueOf(cmGeral.getAccuracy()) + ",");
+                    System.out.print(String.valueOf(cmGeral.getAvgPrecision()) + ",");
+                    System.out.print(String.valueOf(cmGeral.getAvgRecall()) + ",");
+                    System.out.print(String.valueOf(cmGeral.getMacroFMeasure()) + ",");
+                    System.out.print(String.valueOf(cmGeral.getConfidence95Accuracy()) + ",");
+                    System.out.print(String.valueOf(cmGeral.getConfidence95MacroFM())+ ",");
+                    System.out.print(String.valueOf(cmGeral.getCohensKappa()));
+                    System.out.println();
+                    System.out.println(cmGeral.printClassDistributionGold());
+                    System.out.println(cmGeral.toStringProbabilistic());
                 }
 
             }

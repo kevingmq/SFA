@@ -24,7 +24,7 @@ public class BOSSVSClassifier extends Classifier {
   // default training parameters
   public static double factor = 0.95;
 
-  public static int maxF = 10;
+  public static int maxF = 14;
   public static int minF = 4;
   public static int maxS = 4;
 
