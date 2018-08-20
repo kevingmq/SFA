@@ -31,19 +31,26 @@ public class Main {
                 "UCI-MDU-OVER",
                 "UniMiB-MDU",
         };
+        String[] p_datasets_21e9 = new String[]{
+                "UCI",
 
-        int n_source = Integer.valueOf(args[1]);
+        };
+
+
+        //int n_source = Integer.valueOf(args[1]);
 
         try {
-            switch (Integer.valueOf(args[0])) {
+            /*switch (Integer.valueOf(args[0])) {
                 case 0:
                     testSubjectIndependentClassification(p_datasets_subjectIndependent, p_segmentLenght, n_source);
                 case 1:
                     testSubjectDependentClassification(p_datasets_subjectDependent, p_segmentLenght, n_source);
                 case 2:
-
+                    test21e9Classification(p_datasets_21e9, p_segmentLenght, n_source);
                 default:
-            }
+                    timeProcessing();
+            }*/
+            timeProcessing();
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -203,6 +210,122 @@ public class Main {
                 }
 
             }
+        } finally {
+            ParallelFor.shutdown();
+        }
+    }
+
+    public static void test21e9Classification(String[] datasets, String[] segmentLenght, int n_source) throws IOException{
+        try {
+            // the relative path to the datasets
+
+            boolean DEBUG = false;
+            String home = System.getProperty("user.home") + "/datasets/21e9";
+
+            File dir = new File(home);
+
+            for(int parm = 0; parm < datasets.length; parm++) {
+                File d = new File(dir.getAbsolutePath() + "/" + datasets[parm]);
+                System.out.println("==========================");
+                if (d.exists() && d.isDirectory()) {
+                    double somaAccuracy = 0;
+                    double somaPrecision = 0;
+                    double somaRecall = 0;
+                    double somafmeasure = 0;
+
+                    int num_sources = n_source;
+                    int segment_length = Integer.valueOf(segmentLenght[parm]);
+                    Classifier.DEBUG = DEBUG;
+                    TimeSeriesLoader.DEBUG = DEBUG;
+                    int countUsers = 0;
+
+
+
+
+                    File trainFile = new File(dir.getAbsolutePath() + "/" + datasets[parm] +  "/TRAIN");
+                    File testFile = new File(dir.getAbsolutePath() + "/" + datasets[parm] + "/TEST");
+
+
+
+                    MultiVariateTimeSeries[] trainSamples = TimeSeriesLoader.loadMultivariateDataset(trainFile, num_sources, segment_length);
+                    MultiVariateTimeSeries[] testSamples = TimeSeriesLoader.loadMultivariateDataset(testFile, num_sources, segment_length);
+
+
+                    BOSSMDStackClassifier stack = new BOSSMDStackClassifier();
+                    Classifier.Score result = stack.eval(trainSamples, testSamples);
+                    System.out.println(result.outputString);
+                    ConfusionMatrix cmGeral = result.confusionMatrix;
+
+                    stack.shutdown();
+
+
+
+
+                    System.out.println("==========================");
+                    System.out.println("dataset,Accuracy,Precision,Recall,Fscore,95Accuracy,95Fscore,Kappa");
+                    System.out.print(datasets[parm] + ',');
+                    System.out.print(String.valueOf(cmGeral.getAccuracy()) + ",");
+                    System.out.print(String.valueOf(cmGeral.getAvgPrecision()) + ",");
+                    System.out.print(String.valueOf(cmGeral.getAvgRecall()) + ",");
+                    System.out.print(String.valueOf(cmGeral.getMacroFMeasure()) + ",");
+                    System.out.print(String.valueOf(cmGeral.getConfidence95Accuracy()) + ",");
+                    System.out.print(String.valueOf(cmGeral.getConfidence95MacroFM()) + ",");
+                    System.out.println(String.valueOf(cmGeral.getCohensKappa()));
+                    System.out.println("==========================");
+                    System.out.println(cmGeral.printClassDistributionGold());
+                    System.out.println("==========================");
+                    System.out.println(cmGeral.toStringLatex());
+                    System.out.println("==========================");
+                    System.out.println(cmGeral.toString());
+                    System.out.println("==========================");
+                    System.out.println(cmGeral.toStringProbabilistic());
+                    System.out.println("==========================");
+                    System.out.println(" ");
+                    cmGeral.toExportToFile(System.getProperty("user.home") + "/logs/confusionmatrix/21e9/" ,datasets[parm]);
+
+                }
+
+            }
+        } finally {
+            ParallelFor.shutdown();
+        }
+    }
+
+    public static void timeProcessing() throws IOException {
+        try {
+
+
+            boolean DEBUG = false;
+            String home = System.getProperty("user.home") + "/datasets/dataset1";
+            String home2 = System.getProperty("user.home") + "/datasets/dataset2";
+
+            File file = new File(home);
+            File file2 = new File(home2);
+
+
+            if (file.exists()) {
+                int num_sources = 3;
+                int segment_length = 151;
+                Classifier.DEBUG = DEBUG;
+                TimeSeriesLoader.DEBUG = DEBUG;
+
+                MultiVariateTimeSeries[] trainSamples = TimeSeriesLoader.loadMultivariateDataset(file2, num_sources, segment_length);
+                MultiVariateTimeSeries[] testSamples = TimeSeriesLoader.loadMultivariateDataset(file, num_sources, segment_length);
+
+                BOSSMDStackClassifier stack = new BOSSMDStackClassifier();
+                Classifier.Score result = stack.eval(trainSamples, testSamples);
+                System.out.println(result.outputString);
+
+
+                stack.shutdown();
+            }
+
+
+
+
+
+
+
         } finally {
             ParallelFor.shutdown();
         }
